@@ -114,7 +114,7 @@ function BuyBox({ c, me, reload }) {
       {p && p.stato === "in_verifica" ? <div className="note info" style={{ marginTop: 10 }}>Ricevuta in verifica: sbloccheremo il corso appena confermato il pagamento.</div> : (<>
         {p && p.stato === "respinto" && <div className="note bad" style={{ marginTop: 10 }} data-testid="course-buy-rejected">Pagamento rifiutato: {p.nota}</div>}
         <div style={{ margin: "12px 0" }}><PayBox pag={me.pag} a={me.aff} importo={c.prezzo} causaleText={`Corso ${c.titolo} - ${me.aff.nomeAgenzia}`} /></div>
-        <UploadBox label="Carica la ricevuta del corso" testid="course-receipt-upload" onDone={(f) => act(() => post(`/aff/courses/${c.id}/buy`, { file: f.id }), "Ricevuta inviata").then(reload)} />
+        <UploadBox label="Carica la ricevuta del corso" testid="course-receipt-upload" onDone={(f) => act(() => post(`/aff/courses/${c.id}/buy`, { file: f.id }), "Ricevuta inviata").then((r) => r && reload())} />
       </>)}
     </div>
   );
@@ -159,7 +159,7 @@ function CourseEditor({ c, back }) {
     const r = await act(() => (c ? put(`/admin/courses/${c.id}`, body) : post("/admin/courses", body)), "Corso salvato");
     if (r) back();
   };
-  const remove = async () => { if (await ask({ title: "Eliminare il corso?", danger: true, ok: "Elimina" })) act(() => del(`/admin/courses/${c.id}`), "Corso eliminato").then(back); };
+  const remove = async () => { if (await ask({ title: "Eliminare il corso?", danger: true, ok: "Elimina" })) act(() => del(`/admin/courses/${c.id}`), "Corso eliminato").then((r) => r && back()); };
   return (
     <div data-testid="course-editor">
       <button className="back" onClick={back}>← Corsi</button>

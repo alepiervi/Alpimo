@@ -28,7 +28,7 @@ export function AdminNews() {
           </div>
         </div>
       )}
-      <div className="newsgrid">{L.length ? L.map((n) => <NewsCard key={n.id} n={n} admin onEdit={() => setF(n)} onDel={async () => { if (await ask({ title: "Eliminare la comunicazione?", danger: true, ok: "Elimina" })) act(() => del(`/admin/news/${n.id}`), "Eliminata").then(reload); }} />) : <Empty>Nessuna comunicazione.</Empty>}</div>
+      <div className="newsgrid">{L.length ? L.map((n) => <NewsCard key={n.id} n={n} admin onEdit={() => setF(n)} onDel={async () => { if (await ask({ title: "Eliminare la comunicazione?", danger: true, ok: "Elimina" })) act(() => del(`/admin/news/${n.id}`), "Eliminata").then((r) => r && reload()); }} />) : <Empty>Nessuna comunicazione.</Empty>}</div>
     </div>
   );
 }
@@ -53,7 +53,7 @@ export function AdminMats() {
           <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" disabled={!f.file || !f.titolo} onClick={save} data-testid="material-save">Pubblica materiale</button></div>
         </div>
       </div>
-      {L.length ? <div className="mgrid">{L.map((m) => <MatCard key={m.id} m={m} admin onDel={async () => { if (await ask({ title: "Eliminare il materiale?", danger: true, ok: "Elimina" })) act(() => del(`/admin/materials/${m.id}`), "Eliminato").then(reload); }} />)}</div> : <Empty>Nessun materiale.</Empty>}
+      {L.length ? <div className="mgrid">{L.map((m) => <MatCard key={m.id} m={m} admin onDel={async () => { if (await ask({ title: "Eliminare il materiale?", danger: true, ok: "Elimina" })) act(() => del(`/admin/materials/${m.id}`), "Eliminato").then((r) => r && reload()); }} />)}</div> : <Empty>Nessun materiale.</Empty>}
     </div>
   );
 }
@@ -88,7 +88,7 @@ function PagSettings({ s, reload }) {
         <div className="grid3">{F("importo", "Imponibile attivazione €")}{F("iva", "IVA %")}{F("rinnovo", "Rinnovo dominio € (imponibile)")}</div>
         {F("causale", "Causale", "Usa {agenzia} e {url}")}{F("scadenza", "Termine di pagamento")}
         <Field label="Note"><textarea value={p.note || ""} onChange={(e) => setP({ ...p, note: e.target.value })} /></Field>
-        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={() => act(() => put("/admin/settings", { pag: p }), "Dati pagamento salvati").then(reload)} data-testid="pag-save">Salva</button></div>
+        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={() => act(() => put("/admin/settings", { pag: p }), "Dati pagamento salvati").then((r) => r && reload())} data-testid="pag-save">Salva</button></div>
       </div></div>
       <div className="card"><h3 style={{ marginBottom: 10 }}>Anteprima per l'affiliato</h3><PayBox pag={p} a={{ nomeAgenzia: "Agenzia Esempio", urlDef: "agenziaesempio.it" }} /><p className="small muted" style={{ marginTop: 8 }}>Totale attivazione: {eur((parseFloat(p.importo) || 0) * (1 + (parseFloat(p.iva) || 0) / 100))}</p></div>
     </div>
@@ -113,7 +113,7 @@ function LegalSettings({ s, reload }) {
   const [f, setF] = useState({ contratto: s.legali.contratto, privacy: s.legali.privacy });
   const act = useAction();
   const { ask } = useUI();
-  const pub = async (nv) => { if (nv && !(await ask({ title: "Pubblicare una nuova versione?", text: "Tutti gli affiliati dovranno riaccettare i termini al prossimo accesso." }))) return; act(() => post("/admin/legal", { ...f, nuovaVersione: nv }), nv ? "Nuova versione pubblicata" : "Testi salvati").then(reload); };
+  const pub = async (nv) => { if (nv && !(await ask({ title: "Pubblicare una nuova versione?", text: "Tutti gli affiliati dovranno riaccettare i termini al prossimo accesso." }))) return; act(() => post("/admin/legal", { ...f, nuovaVersione: nv }), nv ? "Nuova versione pubblicata" : "Testi salvati").then((r) => r && reload()); };
   return (
     <div className="card" data-testid="legal-settings"><p className="muted">Versione attuale: <b>v{s.legali.versione}</b></p>
       <div style={{ display: "grid", gap: 12, marginTop: 10 }}>
@@ -161,7 +161,7 @@ function General({ s, reload, full }) {
         <Field label="Email dell'admin per le notifiche"><input type="email" value={g.adminEmail} onChange={(e) => setG({ ...g, adminEmail: e.target.value })} data-testid="gen-admin-email" /></Field>
         <Field label="Giorni lavorativi di consegna predefiniti"><input type="number" value={g.giorni} onChange={(e) => setG({ ...g, giorni: e.target.value })} data-testid="gen-days" /></Field>
         <div className="note info small">Email: Aruba {s.email.aruba ? "attivo" : "non configurato"} · Brevo (riserva) {s.email.brevo ? "attivo" : "non configurato"}.</div>
-        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={() => act(() => put("/admin/settings", g), "Impostazioni salvate").then(reload)} data-testid="gen-save">Salva</button></div></div></div>}
+        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={() => act(() => put("/admin/settings", g), "Impostazioni salvate").then((r) => r && reload())} data-testid="gen-save">Salva</button></div></div></div>}
       <div className="card"><h3 style={{ marginBottom: 10 }}>Cambia la tua password</h3><div style={{ display: "grid", gap: 12 }}>
         <Field label="Password attuale"><input type="password" value={pw.old} onChange={(e) => setPw({ ...pw, old: e.target.value })} data-testid="own-pw-old" /></Field>
         <Field label="Nuova password (min 8)"><input type="password" value={pw.new} onChange={(e) => setPw({ ...pw, new: e.target.value })} data-testid="own-pw-new" /></Field>

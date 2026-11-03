@@ -80,7 +80,7 @@ function Dash({ user, nav }) {
         </div>
         <div className="card"><h3 style={{ marginBottom: 8 }}>Domini in scadenza</h3>
           {d.domini.length ? d.domini.map((r) => <div className="todo" key={r.id}><div><b className="mono">{r.url}</b><div className="small muted">{r.nome} · {fd(r.scadenza)} ({daysTo(r.scadenza)} gg)</div></div>
-            <button className="btn sm primary" onClick={() => act(() => post(`/admin/affiliates/${r.id}/renew`), "Rinnovo registrato").then(reload)} data-testid="dash-renew">Rinnovo pagato</button></div>) : <Empty>Nessun dominio in scadenza nei prossimi 30 giorni.</Empty>}
+            <button className="btn sm primary" onClick={() => act(() => post(`/admin/affiliates/${r.id}/renew`), "Rinnovo registrato").then((r) => r && reload())} data-testid="dash-renew">Rinnovo pagato</button></div>) : <Empty>Nessun dominio in scadenza nei prossimi 30 giorni.</Empty>}
         </div>
       </div>
     </div>
@@ -96,7 +96,7 @@ function Richieste({ nav, canOpen }) {
     const nota = accept ? "" : await ask({ title: `Rifiuta ${r.nome}`, input: "textarea", placeholder: "Motivo del rifiuto (verrà inviato all'affiliato)" });
     if (!accept && !nota) return;
     if (accept && !(await ask({ title: `Accettare ${r.nome}?`, text: "L'affiliato riceverà un'email di conferma." }))) return;
-    act(() => post(`/admin/affiliates/${r.id}/decide`, { accept, nota }), accept ? "Richiesta accettata" : "Richiesta rifiutata").then(reload);
+    act(() => post(`/admin/affiliates/${r.id}/decide`, { accept, nota }), accept ? "Richiesta accettata" : "Richiesta rifiutata").then((r) => r && reload());
   };
   const wait = L.filter((r) => r.stato === "in_attesa"), draft = L.filter((r) => r.stato === "bozza"), rej = L.filter((r) => r.stato === "rifiutata");
   return (
@@ -144,7 +144,7 @@ function Scadenze({ nav, canOpen }) {
         <tbody>{L.map((r) => { const d = daysTo(r.scadenza); return (
           <tr key={r.id} data-testid="domain-row"><td data-l="Dominio"><b className="mono">{r.url}</b><div className="small muted">{canOpen ? <a href="#a" onClick={(e) => { e.preventDefault(); nav("affiliati", r.id); }}>{r.nome}</a> : r.nome}</div></td>
             <td data-l="Scadenza">{fd(r.scadenza)}<div><Badge k={d <= 7 ? "bad" : d <= 30 ? "warn" : "ok"}>{d < 0 ? "Scaduto" : `${d} giorni`}</Badge></div></td><td data-l="Promemoria"><RemChips r={r} /></td>
-            <td><button className="btn sm primary" onClick={() => act(() => post(`/admin/affiliates/${r.id}/renew`), "Rinnovo registrato: +1 anno").then(reload)} data-testid="domain-renew">Rinnovo pagato</button></td></tr>); })}</tbody></table>
+            <td><button className="btn sm primary" onClick={() => act(() => post(`/admin/affiliates/${r.id}/renew`), "Rinnovo registrato: +1 anno").then((r) => r && reload())} data-testid="domain-renew">Rinnovo pagato</button></td></tr>); })}</tbody></table>
         {!L.length && <Empty>Nessun dominio attivo.</Empty>}</div>
     </div>
   );

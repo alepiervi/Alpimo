@@ -13,7 +13,7 @@ export default function Scheda({ id, user, back }) {
   const act = useAction();
   if (!a) return null;
   const [lbl, k] = statoInfo(a);
-  const A = (path, body, msg) => act(() => post(`/admin/affiliates/${id}/${path}`, body), msg).then(reload);
+  const A = (path, body, msg) => act(() => post(`/admin/affiliates/${id}/${path}`, body), msg).then((r) => r && reload());
   const P = { a, A, reload, act, id, user };
   return (
     <div data-testid="affiliate-detail">
@@ -29,7 +29,7 @@ export default function Scheda({ id, user, back }) {
         {a.consegna && <ConsegnaCard {...P} />}
         {a.pagamento === "confermato" && <CredCard {...P} />}
         {canP(user, "scadenze") && <DomCard {...P} />}
-        <div className="card"><h3 style={{ marginBottom: 10 }}>Fatturazione</h3><BillingForm value={a.fatturazione} tipo={a.tipo} testid="admin-billing" onSave={(f) => act(() => put(`/admin/affiliates/${id}/billing`, f), "Fatturazione salvata").then(reload)} /></div>
+        <div className="card"><h3 style={{ marginBottom: 10 }}>Fatturazione</h3><BillingForm value={a.fatturazione} tipo={a.tipo} testid="admin-billing" onSave={(f) => act(() => put(`/admin/affiliates/${id}/billing`, f), "Fatturazione salvata").then((r) => r && reload())} /></div>
         <div className="card"><h3 style={{ marginBottom: 10 }}>Account e consensi</h3><dl className="kv">
           <dt>Registrato</dt><dd>{fdt(a.createdAt)}</dd><dt>Contratto</dt><dd>v{a.consensi?.contratto?.versione} · {fdt(a.consensi?.contratto?.at)}</dd>
           <dt>Privacy</dt><dd>v{a.consensi?.privacy?.versione} · {fdt(a.consensi?.privacy?.at)}</dd><dt>Marketing</dt><dd>{a.consensi?.marketing?.value ? "Sì" : "No"} · {fdt(a.consensi?.marketing?.at)}</dd></dl></div>
@@ -61,7 +61,7 @@ function LogoCard({ a, A, id }) {
         <div key={i} className={`logo-slot ${a.logoScelto === i ? "chosen" : ""}`} data-testid={`logo-slot-${i}`}>
           <div className="row between"><b>Logo {i + 1}</b>{a.logoScelto === i && <Badge k="accent">Scelto</Badge>}</div>
           <div className="img">{f ? <img src={fileUrl(f.id)} alt="" /> : <span className="small muted">Vuoto</span>}</div>
-          {f ? <button className="btn sm" onClick={() => A("logo", { idx: i, file: null }, "Logo rimosso")}>Sostituisci</button>
+          {f ? <button className="btn sm" onClick={() => A("logo", { idx: i, file: null }, "Logo rimosso")} data-testid={`logo-remove-${i}`}>Rimuovi</button>
             : <UploadBox small label="Carica" hint="PNG, JPG o SVG" accept="image/*,.svg" owner={id} testid={`logo-upload-${i}`} onDone={(r) => A("logo", { idx: i, file: r.id }, "Logo caricato")} />}
         </div>); })}</div>
     </div>
@@ -85,6 +85,7 @@ function PayCard({ a, A }) {
 
 function ConsegnaCard({ a, A }) {
   const [d, setD] = useState(a.consegna.dataPrevista);
+  useEffect(() => setD(a.consegna.dataPrevista), [a.consegna.dataPrevista]);
   return (
     <div className="card" data-testid="detail-delivery-card"><h3 style={{ marginBottom: 10 }}>Tempi di consegna</h3>
       <div className="row"><Field label="Data prevista"><input type="date" value={d} onChange={(e) => setD(e.target.value)} data-testid="delivery-date-input" /></Field><button className="btn sm" style={{ alignSelf: "flex-end" }} onClick={() => A("consegna", { dataPrevista: d }, "Data aggiornata")} data-testid="delivery-date-save">Salva data</button></div>
@@ -99,7 +100,7 @@ function CredCard({ a, A, act, id, reload }) {
   const { ask } = useUI();
   useEffect(() => { setC(a.cred || {}); setS(a.superAdmin || {}); }, [a]);
   const I = (o, set, k, l, gen) => <Field label={l}><div className="row" style={{ flexWrap: "nowrap" }}><input type="text" className="mono" value={o[k] || ""} onChange={(e) => set({ ...o, [k]: e.target.value })} data-testid={`cred-${set === setS ? "sa" : "aff"}-${k}`} />{gen && <button className="btn sm" onClick={() => set({ ...o, [k]: genPw() })}>Genera</button>}</div></Field>;
-  const save = () => act(() => post(`/admin/affiliates/${id}/cred`, { cred: c, superAdmin: s }), "Credenziali salvate").then(reload);
+  const save = () => act(() => post(`/admin/affiliates/${id}/cred`, { cred: c, superAdmin: s }), "Credenziali salvate").then((r) => r && reload());
   return (
     <div className="card full" data-testid="detail-cred-card"><h3 style={{ marginBottom: 10 }}>Accessi al sito</h3>
       <div className="grid2">
@@ -119,9 +120,10 @@ function CredCard({ a, A, act, id, reload }) {
 
 function DomCard({ a, A }) {
   const [d, setD] = useState(a.dominio.scadenza || "");
+  useEffect(() => setD(a.dominio.scadenza || ""), [a.dominio.scadenza]);
   return (
     <div className="card" data-testid="detail-domain-card"><h3 style={{ marginBottom: 10 }}>Scadenza dominio</h3>
-      <div className="row"><Field label="Scadenza"><input type="date" value={d} onChange={(e) => setD(e.target.value)} data-testid="domain-date-input" /></Field><button className="btn sm" style={{ alignSelf: "flex-end" }} onClick={() => A("domain", { scadenza: d }, "Scadenza aggiornata")}>Salva</button>
+      <div className="row"><Field label="Scadenza"><input type="date" value={d} onChange={(e) => setD(e.target.value)} data-testid="domain-date-input" /></Field><button className="btn sm" style={{ alignSelf: "flex-end" }} onClick={() => A("domain", { scadenza: d }, "Scadenza aggiornata")} data-testid="domain-date-save">Salva</button>
         {a.dominio.scadenza && <button className="btn sm primary" style={{ alignSelf: "flex-end" }} onClick={() => A("renew", {}, "Rinnovo registrato: +1 anno")} data-testid="detail-renew">Rinnovo pagato (+1 anno)</button>}</div>
       {a.dominio.scadenza && <div style={{ marginTop: 10 }}><RemChips r={{ scadenza: a.dominio.scadenza, inviati: a.dominio.inviati }} /></div>}
       {a.dominio.storico?.length > 0 && <><h4>Storico rinnovi</h4>{a.dominio.storico.map((s, i) => <div key={i} className="small">{fd(s.da)} → {fd(s.a)} · registrato {fd(s.at)}</div>)}</>}
@@ -131,7 +133,7 @@ function DomCard({ a, A }) {
 
 function DocsCard({ a, act, reload }) {
   const { ask } = useUI();
-  const dec = async (d, approve) => { const nota = approve ? "" : await ask({ title: "Rifiuta documento", input: "textarea", placeholder: "Motivo" }); if (!approve && !nota) return; act(() => post(`/admin/docs/${d.id}`, { approve, nota }), approve ? "Documento approvato" : "Documento rifiutato").then(reload); };
+  const dec = async (d, approve) => { const nota = approve ? "" : await ask({ title: "Rifiuta documento", input: "textarea", placeholder: "Motivo" }); if (!approve && !nota) return; act(() => post(`/admin/docs/${d.id}`, { approve, nota }), approve ? "Documento approvato" : "Documento rifiutato").then((r) => r && reload()); };
   return (
     <div className="card" data-testid="detail-docs-card"><h3 style={{ marginBottom: 10 }}>Documenti</h3>
       {a.docs.length ? a.docs.map((d) => (
@@ -149,9 +151,9 @@ function PaymentsCard({ a, act, reload, id }) {
   const manual = async () => {
     const descr = await ask({ title: "Registra pagamento manuale", input: "text", placeholder: "Descrizione (es. Servizio extra)" }); if (!descr) return;
     const tot = await ask({ title: "Importo IVA inclusa (€)", input: "number", placeholder: "es. 122" }); if (!tot) return;
-    act(() => post("/admin/payments", { affId: id, descrizione: descr, totale: parseFloat(tot) }), "Pagamento registrato").then(reload);
+    act(() => post("/admin/payments", { affId: id, descrizione: descr, totale: parseFloat(tot) }), "Pagamento registrato").then((r) => r && reload());
   };
-  const extra = (p) => p.stato === "pagato" && <UploadBox small label={p.invoice ? "Sostituisci fattura" : "Allega fattura"} hint="PDF" accept=".pdf" owner={id} testid={`invoice-upload-${p.id}`} onDone={(r) => act(() => post(`/admin/payments/${p.id}/invoice`, { file: r.id }), "Fattura allegata").then(reload)} />;
+  const extra = (p) => p.stato === "pagato" && <UploadBox small label={p.invoice ? "Sostituisci fattura" : "Allega fattura"} hint="PDF" accept=".pdf" owner={id} testid={`invoice-upload-${p.id}`} onDone={(r) => act(() => post(`/admin/payments/${p.id}/invoice`, { file: r.id }), "Fattura allegata").then((r) => r && reload())} />;
   return (
     <div className="card full" data-testid="detail-payments-card"><div className="row between" style={{ marginBottom: 10 }}><h3>Pagamenti e fatture</h3><button className="btn sm" onClick={manual} data-testid="manual-payment-btn"><Ico n="card" s={14} />Registra pagamento</button></div>
       <PayTable L={a.payments} admin extra={extra} />

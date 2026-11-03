@@ -1,10 +1,11 @@
 import io
+import re
 import csv
 import secrets
 from datetime import date
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from core import (db, nowiso, today, uid, admin_user, need, super_user, can, get_settings, notify, notify_admins, send_mail, aff_name,
                   url_def, enc, dec, file_info, add_biz, add_year, days_to, hash_pw, next_seq, PERMS, email_status)
@@ -193,7 +194,7 @@ async def set_logo(aid: str, body: LogoIn, u=Depends(need("affiliati"))):
 
 class PayIn(BaseModel):
     confirm: bool
-    giorni: int = 15
+    giorni: int = Field(15, ge=1, le=365)
     nota: str = ""
 
 
@@ -285,7 +286,10 @@ class DomIn(BaseModel):
 
 @router.post("/affiliates/{aid}/domain")
 async def domain(aid: str, body: DomIn, u=Depends(need("scadenze"))):
-    date.fromisoformat(body.scadenza)
+    try:
+        date.fromisoformat(body.scadenza)
+    except ValueError:
+        raise HTTPException(400, "Data non valida")
     await db.affiliates.update_one({"id": aid}, {"$set": {"dominio.scadenza": body.scadenza, "dominio.inviati": []}})
     return {"ok": True}
 
@@ -300,7 +304,7 @@ async def renew(aid: str, u=Depends(need("scadenze"))):
     iva = float(str(s["pag"].get("iva") or 0).replace(",", ".") or 0)
     await db.affiliates.update_one({"id": aid}, {"$set": {"dominio.scadenza": new, "dominio.inviati": []},
                                                  "$push": {"dominio.storico": {"da": sc, "a": new, "at": nowiso()}}})
-    await db.payments.insert_one({"id": uid(), "affId": aid, "kind": "rinnovo", "descrizione": f"Rinnovo dominio {url_def(a)} fino al {new}", "imponibile": imp,
+    await db.payments.insert_one({"id": uid(), "affId": aid, "kind": "rinnovo", "descrizione": f"Rinnovo dominio {url_def(a)} fino al {date.fromisoformat(new).strftime('%d/%m/%Y')}", "imponibile": imp,
                                   "iva": iva, "totale": round(imp * (1 + iva / 100), 2), "stato": "pagato", "ricevuta": None, "nota": "", "at": nowiso(), "invoice": None})
     return {"ok": True, "scadenza": new}
 
@@ -354,7 +358,7 @@ async def doc_decide(did: str, body: DocDecIn, u=Depends(need("affiliati"))):
 class ManualPayIn(BaseModel):
     affId: str
     descrizione: str
-    totale: float
+    totale: float = Field(gt=0)
     kind: str = "altro"
 
 
@@ -570,7 +574,7 @@ async def report(year: int = 0, u=Depends(need("report"))):
     byk = {"attivazione": 0, "corso": 0, "rinnovo": 0, "altro": 0}
     months = [0.0] * 12
     verif = 0.0
-    years = sorted({int(p["at"][:4]) for p in pays} | {date.today().year})
+    years = sorted({int((p.get("pagatoAt") or p["at"])[:4]) for p in pays} | {date.today().year})
     for p in pays:
         if p["stato"] == "in_verifica":
             verif += p["totale"]
@@ -627,7 +631,7 @@ async def emails(q: str = "", ref: str = "", u=Depends(need("email"))):
     if ref:
         f["ref"] = ref
     if q:
-        f["$or"] = [{"to": {"$regex": q, "$options": "i"}}, {"subject": {"$regex": q, "$options": "i"}}]
+        f["$or"] = [{"to": {"$regex": re.escape(q), "$options": "i"}}, {"subject": {"$regex": re.escape(q), "$options": "i"}}]
     return {"items": await db.email_log.find(f, {"_id": 0}).sort("at", -1).to_list(300), "status": email_status()}
 
 

@@ -96,11 +96,11 @@ function Profilo({ a, reload, setTab }) {
   if (!f) return null;
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const setP = (i, k, v) => setF({ ...f, persone: f.persone.map((p, j) => (j === i ? { ...p, [k]: v } : p)) });
-  const save = () => act(() => put("/aff/profile", f), "Bozza salvata").then(reload);
+  const save = () => act(() => put("/aff/profile", f), "Bozza salvata").then((r) => r && reload());
   const send = async () => {
     if (!(await put("/aff/profile", f).then(() => true).catch(() => false))) return act(() => put("/aff/profile", f));
     if (!(await ask({ title: "Inviare la richiesta?", text: "Dopo l'invio i dati non saranno più modificabili fino alla risposta dell'amministratore." }))) return;
-    act(() => post("/aff/submit"), "Richiesta inviata").then(reload);
+    act(() => post("/aff/submit"), "Richiesta inviata").then((r) => r && reload());
   };
   return (
     <div className="card" data-testid="card-profilo">
@@ -176,7 +176,7 @@ function LogoUrl({ a, reload }) {
   const logoOk = a.loghi.every(Boolean);
   const choose = async (i) => {
     if (!(await ask({ title: "Confermi l'URL definitivo?", text: `${a.urls[i].value}\n\nDopo la conferma non potrai più cambiarlo.` }))) return;
-    act(() => post("/aff/url-final", { idx: i }), "URL definitivo confermato").then(reload);
+    act(() => post("/aff/url-final", { idx: i }), "URL definitivo confermato").then((r) => r && reload());
   };
   const logo = a.logoScelto != null && a.loghiInfo[a.logoScelto];
   return (
@@ -186,7 +186,7 @@ function LogoUrl({ a, reload }) {
       {logoOk ? (
         <div className="logos">
           {a.loghiInfo.map((f, i) => (
-            <button key={i} className={`logo-tile ${a.logoScelto === i ? "sel" : ""}`} onClick={() => a.pagamento !== "confermato" && act(() => post("/aff/logo", { idx: i }), "Logo selezionato").then(reload)} data-testid={`logo-choice-${i}`}>
+            <button key={i} className={`logo-tile ${a.logoScelto === i ? "sel" : ""}`} onClick={() => a.pagamento !== "confermato" && act(() => post("/aff/logo", { idx: i }), "Logo selezionato").then((r) => r && reload())} data-testid={`logo-choice-${i}`}>
               {a.logoScelto === i && <span className="tag"><Badge k="accent">Scelto</Badge></span>}
               <div className="img"><img src={fileUrl(f.id)} alt={`Logo ${i + 1}`} /></div><b>Proposta {i + 1}</b>
             </button>
@@ -202,7 +202,7 @@ function LogoUrl({ a, reload }) {
             {a.urlDefinitivo == null && u.stato === "disponibile" && <button className="btn sm primary" onClick={() => choose(i)} data-testid={`url-choose-${i}`}>Scegli come definitivo</button>}
             {a.urlDefinitivo == null && u.stato === "non_disponibile" && (<>
               <input type="text" style={{ width: 180 }} placeholder="URL alternativo" value={alt[i] || ""} onChange={(e) => setAlt({ ...alt, [i]: e.target.value })} data-testid={`url-alt-input-${i}`} />
-              <button className="btn sm" onClick={() => act(() => post("/aff/url-alt", { idx: i, value: alt[i] }), "Nuovo URL proposto").then(reload)} data-testid={`url-alt-submit-${i}`}>Proponi</button>
+              <button className="btn sm" onClick={() => act(() => post("/aff/url-alt", { idx: i, value: alt[i] }), "Nuovo URL proposto").then((r) => r && reload())} data-testid={`url-alt-submit-${i}`}>Proponi</button>
             </>)}
           </div>
         </div>
@@ -244,7 +244,7 @@ function Pagamento({ me, reload }) {
       <h4>Ricevuta del bonifico</h4>
       {a.ricevutaInfo && <FileChip f={a.ricevutaInfo} testid="receipt-open" />}
       {a.pagamento === "in_verifica" ? <div className="note info" style={{ marginTop: 10 }}>Stiamo verificando il pagamento: riceverai un'email di conferma.</div>
-        : <UploadBox label="Carica la ricevuta" testid="receipt-upload" onDone={(f) => act(() => post("/aff/receipt", { file: f.id }), "Ricevuta caricata").then(reload)} />}
+        : <UploadBox label="Carica la ricevuta" testid="receipt-upload" onDone={(f) => act(() => post("/aff/receipt", { file: f.id }), "Ricevuta caricata").then((r) => r && reload())} />}
     </div>
   );
 }
@@ -283,7 +283,7 @@ function Sito({ a, reload }) {
   const act = useAction();
   const { ask } = useUI();
   const c = a.cred || {};
-  const req = async () => { if (await ask({ title: "Mettere online il sito?", text: "Confermi di aver terminato le modifiche? L'amministratore riceverà la richiesta." })) act(() => post("/aff/request-online"), "Richiesta inviata").then(reload); };
+  const req = async () => { if (await ask({ title: "Mettere online il sito?", text: "Confermi di aver terminato le modifiche? L'amministratore riceverà la richiesta." })) act(() => post("/aff/request-online"), "Richiesta inviata").then((r) => r && reload()); };
   return (
     <div className="card pass" data-testid="card-sito">
       <div className="pass-h"><b><Ico n="plane" s={18} />Il tuo sito · Carta d'imbarco</b><span className="route-mini">PORTALE <i /> {(a.urlDef || "").toUpperCase()}</span></div>

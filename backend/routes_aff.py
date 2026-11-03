@@ -300,7 +300,7 @@ async def materials(u=Depends(affiliate_user)):
 
 @router.post("/materials/{mid}/download")
 async def mat_dl(mid: str, u=Depends(affiliate_user)):
-    await db.materials.update_one({"id": mid}, {"$inc": {"downloads": 1}})
+    await db.materials.update_one({"id": mid, "deleted": {"$ne": True}}, {"$inc": {"downloads": 1}})
     return {"ok": True}
 
 
@@ -313,7 +313,7 @@ async def course_gate(u):
 
 
 def course_view(c, prog, purch):
-    unlocked = not c.get("premium") or (purch and purch["stato"] == "pagato")
+    unlocked = bool(not c.get("premium") or (purch and purch["stato"] == "pagato"))
     fatte = (prog or {}).get("fatte", [])
     les = []
     for i, l in enumerate(c.get("lezioni", [])):
@@ -351,7 +351,9 @@ class LessonIn(BaseModel):
 @router.post("/courses/{cid}/done")
 async def lesson_done(cid: str, body: LessonIn, u=Depends(affiliate_user)):
     a = await course_gate(u)
-    c = await db.courses.find_one({"id": cid}, {"_id": 0})
+    c = await db.courses.find_one({"id": cid, "pubblicato": True}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Corso non trovato")
     purch = await db.payments.find_one({"affId": u["id"], "kind": "corso", "ref": cid})
     v = course_view(c, None, purch)
     les = next((x for x in v["lezioni"] if x["id"] == body.lid), None)

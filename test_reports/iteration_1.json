@@ -1,0 +1,56 @@
+{
+  "summary": "First full run. Backend: 38 pytest cases (auth, register/verify/forgot/reset, draft+billing validation+submit, reject/resubmit/accept, full workflow on a fresh affiliate: logos, URL verify, receipt, payment confirm, creds, deliver, request-online, online, domain/renew, invoice FT n/anno, manual payment, documents, tickets, notifications, courses free/premium/purchase/editor, bacheca, materiali, report, CSV exports, email log, IBAN, team/collaborator perms, deactivation, change-password, cross-tenant security, bcrypt + encrypted creds). 34/38 passed. Lockout after 5 failed logins does NOT work behind the ingress (important). There are three 500s on bad input. Frontend (Playwright, 10 flows): UI register -> verify (code taken from email log) -> draft -> billing -> doc upload -> submit -> admin reject with reason -> affiliate sees reason -> resubmit; mario: receipt view, confirm payment with giorni, Tempi di consegna, creds, deliver, boarding pass Mostra/Copia, request online, admin Metti online; sole: accept, 3 logo uploads, URL Disponibile/Non disponibile, logo + URL choice, pay box, Academy locked, notification bell read-all + navigation; blu: YouTube/Vimeo embeds, lesson complete, 50%->100% 'Corso completato', premium buy box -> admin Conferma e sblocca; course editor create+publish; tickets T-000x (unread highlight, reply, resolve, reopen); bacheca 'Nuovo' + unread counter clears; materiali upload/download; report + CSV (BOM ok); Scadenze reminder chips; Registro email search + 'Non inviata (email non configurata)'; IBAN validation; team collaborator shows only Panoramica/Ticket/Impostazioni and gets 403 on /admin/report; deactivated collaborator gets 'Account disattivato'; doc reject/reupload; invoice upload -> affiliate downloads FT 3/2026; legal publish -> terms gate -> accept. All these worked apart from the bugs listed below.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/auth/login", "issue": "Lockout after 5 failed logins never triggers in the preview/prod deployment. The identifier is f'{request.client.host}:{email}'. Behind the K8s ingress, request.client.host is the IP of whichever ingress/proxy pod handled the request, and it changes between requests. DB showed the same email split across 2 keys ('10.66.0.11:...' count 3 and '10.66.5.130:...' count 3), so the 6th attempt still returns 401 instead of 429. Fix: key the counter on the email alone (or use the first IP in X-Forwarded-For plus the email), and also check a per-email total.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/admin/affiliates/{aid}/domain", "issue": "An invalid date (e.g. 'not-a-date') raises ValueError from date.fromisoformat and returns 500. Wrap it in try/except and return 400 'Data non valida'."},
+      {"endpoint": "POST /api/aff/courses/{cid}/done", "issue": "An unknown or unpublished cid returns 500 (AttributeError: 'NoneType'.get in course_view). Return 404 when the course is missing or not pubblicato."},
+      {"endpoint": "GET /api/admin/emails?q=(", "issue": "q is passed straight into Mongo $regex, so special characters return 500. Use re.escape(q)."},
+      {"endpoint": "GET /api/aff/courses", "issue": "course_view 'unlocked' is None (not False) for a premium course with no purchase: `not premium or (purch and ...)`. Wrap it in bool()."},
+      {"endpoint": "POST /api/admin/affiliates/{aid}/payment and POST /api/admin/payments", "issue": "No bounds check: giorni can be 0 or negative, and totale can be 0 or negative. Add Pydantic constraints (giorni ge=1, totale gt=0)."},
+      {"endpoint": "GET /api/notifications (admin)", "issue": "All admins share to='admin'. A collaborator with only the 'ticket' permission sees every admin notification (payments, registrations, documents), and clicking one leads to views they cannot access. Filter by notification kind against the user's perms."},
+      {"endpoint": "POST /api/aff/materials/{mid}/download", "issue": "Increments the counter for deleted or nonexistent materials and does not check deleted flag (cosmetic)."},
+      {"endpoint": "GET /api/admin/report", "issue": "'years' is built from p['at'], but the totals filter on pagatoAt. A payment paid in a different year from when it was created can be in a year that is not offered in the selector."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BillingForm (Affiliate > Documenti > Dati di fatturazione)", "issue": "If saving fails validation (e.g. CAP '123'), every field the user typed is wiped. Cause: in AffTabs.jsx, `act(...).then(reload)` reloads even on failure (act returns false). reload produces a new `value` object, and `useEffect(() => setF(value), [value])` then resets the form to the stored (empty) data. Only reload when act returns truthy, or don't reset local state on error. The same pattern exists in the admin BillingForm in the scheda.", "selector": "[data-testid='billing-save']", "priority": "MEDIUM"},
+      {"component": "AdminScheda DomCard (Scadenza dominio)", "issue": "The date input runs useState(a.dominio.scadenza) only once and never syncs. It was empty after the payment confirm set the scadenza (needed a remount), and after 'Rinnovo pagato (+1 anno)' it still showed the old date (2027-11-03, while the affiliate saw 'fino al 2028-11-03'). Add a useEffect that syncs it with a.dominio.scadenza. Similar risk for the delivery-date input (ConsegnaCard).", "selector": "[data-testid='domain-date-input']", "priority": "LOW"},
+      {"component": "AdminScheda logo slot", "issue": "The button labelled 'Sostituisci' actually removes the logo (sets file null). Rename it to 'Rimuovi', or open the file picker directly.", "selector": "[data-testid^='logo-slot-']", "priority": "LOW"},
+      {"component": "AdminScheda Scadenza dominio", "issue": "The 'Salva' button next to the domain date has no data-testid.", "selector": "[data-testid='detail-domain-card'] button", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin (all views) at 1920px", "issues": ["Content is capped at about 1070px and left-aligned beside the sidebar, which leaves an empty band of roughly 600px on the right. Centre it or allow a wider max-width."]},
+      {"screen": "Date inputs (delivery date, domain date)", "issues": ["Native <input type=date> shows the browser locale (mm/dd/yyyy in en-US) in an Italian UI. Consider a custom date picker or an Italian format."]},
+      {"screen": "Toasts", "issues": ["Toasts stay on screen across logout/login (for example 'Richiesta inviata' was still visible on the admin dashboard after switching user)."]},
+      {"screen": "Affiliate Pagamenti", "issues": ["The rinnovo description shows an ISO date ('fino al 2028-11-03'). Format it as Italian."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_portale_affiliati.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "HIGH: fix the brute-force lockout identifier (email-based, or X-Forwarded-For first hop + email) so the 6th wrong login returns 429 behind the ingress",
+    "Billing form: don't reload/reset local state when the save fails (AffTabs.jsx BillingForm + act().then(reload))",
+    "Return 400/404 instead of 500 for: an invalid domain date, an unknown course id in /aff/courses/{cid}/done, and regex special characters in /admin/emails?q (use re.escape)",
+    "Sync the DomCard and delivery-date inputs with props after reload/renew",
+    "Filter admin notifications by collaborator permissions",
+    "Validate giorni >= 1 and totale > 0; return bool for course 'unlocked'"
+  ],
+  "critical_code_review_comments": [
+    "routes_admin.py is 735 lines; split it (affiliates/payments, courses, content, settings/team, report).",
+    "Files with owner='public' (materials, course MP4s, covers) can be downloaded by any logged-in affiliate who has the file id. Premium lesson file ids are hidden while locked, but an MP4 id that has leaked stays accessible without a purchase. Consider a course-aware file ACL.",
+    "domain_job runs every 6h and loops over all affiliates sequentially with awaits per send. That is fine for now, but it is not idempotent across multiple backend replicas (duplicate reminders are possible).",
+    "seed_admin correctly creates the admin only if missing and never overwrites its password. Bcrypt hashes start with $2b$. Cookies are httpOnly, secure, SameSite=None. CORS uses explicit origins from env with credentials. Site credentials are stored Fernet-encrypted (string) in affiliates.cred and superAdmin. Verified."
+  ],
+  "updated_files": ["/app/backend/tests/test_portale_affiliati.py"],
+  "success_rate": {"backend": "89% (34/38)", "frontend": "~92% (all requested flows work; 1 medium + 3 low UI bugs)"},
+  "test_credentials": "From /app/memory/test_credentials.md: admin@alpimo.it / Alpimo-Admin-2026; sole@demo.it, mario@demo.it, blu@demo.it / demo1234. These still work.",
+  "seed_data_creation": "Created test_*@test.it affiliates (one through the UI, 'TEST UI Viaggi', password Password123, state in_attesa), test_collab_* admins (deactivated or limited), TEST tickets T-0002..T-0004, a TEST UI course (published), a TEST UI Comunicazione news item, and a TEST UI Brochure material. Seed state changed: mario is now paid, delivered and online with invoice FT 3/2026 and a rinnovo; sole is accepted, has 3 logos, logo 2 and URL viaggidelsole.it chosen, and is at the payment step; blu has completed the free course and bought the premium course (confirmed). The legal version was bumped to v2; mario, sole and blu have re-accepted, while the other TEST users will see the terms gate.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest /app/backend/tests/test_portale_affiliati.py. The test creates its own fresh affiliate and does not depend on seed state, except that it logs in as sole/mario/blu and uses the admin. Four known failures: test_bruteforce_lockout, test_invalid_domain_date, test_done_invalid_course and test_emails_search_special_chars should pass once fixed. File uploads use the hidden <input type=file> that carries the data-testid itself (e.g. [data-testid='doc-upload-identita']), not a label wrapper.",
+  "rca of the issue": "Brute-force lockout: routes_auth.login builds ident from request.client.host. In K8s the TCP peer is the ingress/proxy pod, and several pods (10.66.0.11 and 10.66.5.130 observed) round-robin the requests. The failure counter is therefore split per proxy IP and never reaches 5 for one key. Repro: 6 bad logins for a new email give 401 x6, and db.login_attempts holds 2 docs with count 3. Mitigation: ident = email (optionally also the per-client IP from X-Forwarded-For[0])."
+}

@@ -98,9 +98,9 @@ async def register(body: RegisterIn, response: Response):
 
 
 @router.post("/login")
-async def login(body: LoginIn, request: Request, response: Response):
+async def login(body: LoginIn, response: Response):
     email = body.email.strip().lower()
-    ident = f"{request.client.host if request.client else ''}:{email}"
+    ident = f"login:{email}"
     att = await db.login_attempts.find_one({"identifier": ident})
     if att and att.get("count", 0) >= 5 and att.get("until", "") > nowiso():
         raise HTTPException(429, "Troppi tentativi: riprova tra 15 minuti")

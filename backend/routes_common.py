@@ -57,14 +57,24 @@ def nkey(u):
     return "admin" if u["role"] == "admin" else u["id"]
 
 
+VIEW_PERMS = {"affiliato": ["affiliati", "richieste"], "ticket": ["ticket"], "corsi": ["corsi"], "scadenze": ["scadenze", "affiliati"]}
+
+
+def nquery(u):
+    q = {"to": nkey(u)}
+    if u["role"] == "admin" and not u.get("is_super"):
+        q["view"] = {"$in": [None] + [v for v, ps in VIEW_PERMS.items() if any(can(u, p) for p in ps)]}
+    return q
+
+
 @router.get("/notifications")
 async def notifs(u=Depends(current_user)):
-    return await db.notifications.find({"to": nkey(u)}, {"_id": 0}).sort("at", -1).to_list(40)
+    return await db.notifications.find(nquery(u), {"_id": 0}).sort("at", -1).to_list(40)
 
 
 @router.post("/notifications/read-all")
 async def notifs_all(u=Depends(current_user)):
-    await db.notifications.update_many({"to": nkey(u)}, {"$set": {"letto": True}})
+    await db.notifications.update_many(nquery(u), {"$set": {"letto": True}})
     return {"ok": True}
 
 

@@ -8,7 +8,7 @@ const DST = { in_verifica: ["In verifica", "warn"], approvato: ["Approvato", "ok
 
 export function BillingForm({ value, tipo, onSave, testid = "billing" }) {
   const [f, setF] = useState(value || {});
-  useEffect(() => setF(value || {}), [value]);
+  useEffect(() => setF(value || {}), [JSON.stringify(value || {})]); // eslint-disable-line
   const F = (k, l, p = {}) => <Field label={l}><input type="text" value={f[k] || ""} onChange={(e) => setF({ ...f, [k]: e.target.value })} data-testid={`${testid}-${k}`} {...p} /></Field>;
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -53,7 +53,7 @@ export function DocTab({ me, reload }) {
       </div>
       <div className="card" data-testid="card-fatturazione">
         <div className="card-h"><h3>Dati di fatturazione</h3></div>
-        <BillingForm value={a.fatturazione} tipo={a.tipo} onSave={(f) => act(() => put("/aff/billing", f), "Dati di fatturazione salvati").then(reload)} />
+        <BillingForm value={a.fatturazione} tipo={a.tipo} onSave={(f) => act(() => put("/aff/billing", f), "Dati di fatturazione salvati").then((r) => r && reload())} />
       </div>
       <div className="card" data-testid="card-consensi">
         <div className="card-h"><h3>Consensi</h3></div>
@@ -61,7 +61,7 @@ export function DocTab({ me, reload }) {
           <dt>Contratto</dt><dd>Accettato il {fdt(c.contratto?.at)} (v{c.contratto?.versione}) · <a href="#c" onClick={(e) => { e.preventDefault(); showLegal(openModal, "contratto"); }}>Leggi</a></dd>
           <dt>Privacy</dt><dd>Accettata il {fdt(c.privacy?.at)} (v{c.privacy?.versione}) · <a href="#p" onClick={(e) => { e.preventDefault(); showLegal(openModal, "privacy"); }}>Leggi</a></dd>
           <dt>Marketing</dt><dd>
-            <label className="chk" style={{ marginTop: 0 }}><input type="checkbox" checked={!!c.marketing?.value} onChange={(e) => act(() => post("/aff/marketing", { value: e.target.checked }), e.target.checked ? "Consenso marketing dato" : "Consenso marketing revocato").then(reload)} data-testid="marketing-toggle" />
+            <label className="chk" style={{ marginTop: 0 }}><input type="checkbox" checked={!!c.marketing?.value} onChange={(e) => act(() => post("/aff/marketing", { value: e.target.checked }), e.target.checked ? "Consenso marketing dato" : "Consenso marketing revocato").then((r) => r && reload())} data-testid="marketing-toggle" />
               <span>{c.marketing?.value ? "Consenso dato" : "Nessun consenso"} · {fdt(c.marketing?.at)}</span></label>
           </dd>
         </dl>
