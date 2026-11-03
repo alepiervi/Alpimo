@@ -52,7 +52,7 @@ class PwIn(BaseModel):
 
 
 def public_user(u):
-    return {k: u.get(k) for k in ("id", "email", "role", "is_super", "nome", "perms", "verified", "active")}
+    return {k: u.get(k) for k in ("id", "email", "role", "is_super", "is_master", "tutteAziende", "aziende", "nome", "perms", "verified", "active")}
 
 
 async def send_verify(u):

@@ -318,3 +318,26 @@ def url_def(a):
 
 def itd(iso):
     return date.fromisoformat(iso[:10]).strftime("%d/%m/%Y") if iso else ""
+
+
+def scope_all(u):
+    return bool(u.get("is_super") or u.get("tutteAziende"))
+
+
+def aff_q(u):
+    return {} if scope_all(u) else {"aziendaId": {"$in": u.get("aziende") or []}}
+
+
+async def scope_ids(u):
+    if scope_all(u):
+        return None
+    return {a["id"] for a in await db.affiliates.find(aff_q(u), {"_id": 0, "id": 1}).to_list(10000)}
+
+
+async def pag_for(a):
+    s = await get_settings()
+    if a and a.get("aziendaId"):
+        c = await db.companies.find_one({"id": a["aziendaId"]}, {"_id": 0})
+        if c and (c.get("pag") or {}).get("iban"):
+            return c["pag"]
+    return s["pag"]

@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 from core import (db, nowiso, uid, affiliate_user, get_settings, notify, notify_admins, send_mail, admin_email, aff_name,
-                  url_def, dec, file_info)
+                  url_def, dec, file_info, pag_for)
 
 router = APIRouter(prefix="/api/aff")
 DOC_TYPES = {"identita": True, "cf": True, "visura": None, "licenza": False, "altro": False}
@@ -50,7 +50,7 @@ async def view_aff(a, s=None):
     s = s or await get_settings()
     out = dict(a)
     out["cred"] = dec(a.get("cred")) if a.get("consegnato") else {}
-    for k in ("superAdmin", "aziendaAffiliante", "registrar"):
+    for k in ("superAdmin", "aziendaAffiliante", "aziendaId", "registrar"):
         out.pop(k, None)
     out["loghiInfo"] = [await file_info(x) for x in a.get("loghi") or [None] * 3]
     out["ricevutaInfo"] = await file_info(a.get("ricevuta"))
@@ -66,7 +66,7 @@ async def me(u=Depends(affiliate_user)):
     have = {d["tipo"] for d in docs if d["stato"] != "rifiutato"}
     need = [t for t, req in DOC_TYPES.items() if req or (req is None and a["tipo"] == "azienda")]
     unread = await db.news.count_documents({"lettiDa": {"$ne": u["id"]}})
-    return {"aff": await view_aff(a, s), "pag": s["pag"], "giorni": s["giorni"], "legali": {"versione": s["legali"]["versione"]},
+    return {"aff": await view_aff(a, s), "pag": await pag_for(a), "giorni": s["giorni"], "legali": {"versione": s["legali"]["versione"]},
             "docsMancanti": [t for t in need if t not in have], "newsUnread": unread}
 
 
@@ -219,9 +219,9 @@ async def receipt(body: FileIn, u=Depends(affiliate_user)):
     await own_file(body.file, u)
     if a.get("urlDefinitivo") is None or a["pagamento"] not in ("nessuno", "respinto"):
         raise HTTPException(400, "Caricamento ricevuta non disponibile")
-    s = await get_settings()
-    imp = float(str(s["pag"].get("importo") or 0).replace(",", ".") or 0)
-    iva = float(str(s["pag"].get("iva") or 0).replace(",", ".") or 0)
+    pg = await pag_for(a)
+    imp = float(str(pg.get("importo") or 0).replace(",", ".") or 0)
+    iva = float(str(pg.get("iva") or 0).replace(",", ".") or 0)
     await db.affiliates.update_one({"id": u["id"]}, {"$set": {"ricevuta": body.file, "ricevutaAt": nowiso(), "pagamento": "in_verifica", "notaPagamento": ""}})
     pay = {"affId": u["id"], "kind": "attivazione", "descrizione": f"Attivazione sito {url_def(a)}", "imponibile": imp, "iva": iva,
            "totale": round(imp * (1 + iva / 100), 2), "stato": "in_verifica", "ricevuta": body.file, "nota": "", "at": nowiso()}
@@ -393,8 +393,7 @@ async def course_buy(cid: str, body: FileIn, u=Depends(affiliate_user)):
     ex = await db.payments.find_one({"affId": u["id"], "kind": "corso", "ref": cid})
     if ex and ex["stato"] in ("in_verifica", "pagato"):
         raise HTTPException(400, "Ricevuta già caricata")
-    s = await get_settings()
-    iva = float(str(s["pag"].get("iva") or 0).replace(",", ".") or 0)
+    iva = float(str((await pag_for(a)).get("iva") or 0).replace(",", ".") or 0)
     tot = float(c.get("prezzo") or 0)
     imp = round(tot / (1 + iva / 100), 2)
     pay = {"affId": u["id"], "kind": "corso", "ref": cid, "descrizione": f"Corso Premium: {c['titolo']}", "imponibile": imp, "iva": iva,

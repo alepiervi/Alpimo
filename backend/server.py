@@ -51,7 +51,7 @@ async def startup_tasks():
     s = await get_settings()
     em, pw = os.environ["ADMIN_EMAIL"].lower(), os.environ["ADMIN_PASSWORD"]
     if not await db.users.find_one({"role": "admin"}):
-        await db.users.insert_one({"id": uid(), "email": em, "password_hash": hash_pw(pw), "role": "admin", "is_super": True, "nome": "Amministratore",
+        await db.users.insert_one({"id": uid(), "email": em, "password_hash": hash_pw(pw), "role": "admin", "is_super": True, "is_master": True, "tutteAziende": True, "nome": "Amministratore",
                                    "perms": PERMS, "verified": True, "active": True, "created_at": nowiso()})
     try:
         init_storage()

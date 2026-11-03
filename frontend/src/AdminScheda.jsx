@@ -54,14 +54,16 @@ export default function Scheda({ id, user, back }) {
 }
 
 function InternalCard({ a, A }) {
-  const [f, setF] = useState({ aziendaAffiliante: a.aziendaAffiliante || "", registrar: a.registrar || "" });
+  const [f, setF] = useState({ aziendaId: a.aziendaId || "", registrar: a.registrar || "" });
   const [opt] = useLoad("/admin/internal-options");
-  useEffect(() => setF({ aziendaAffiliante: a.aziendaAffiliante || "", registrar: a.registrar || "" }), [a.aziendaAffiliante, a.registrar]);
+  const [C] = useLoad("/admin/companies");
+  useEffect(() => setF({ aziendaId: a.aziendaId || "", registrar: a.registrar || "" }), [a.aziendaId, a.registrar]);
   const sugg = (id, L) => <datalist id={id}>{(L || []).map((x) => <option key={x} value={x} />)}</datalist>;
   return (
-    <div className="card" data-testid="detail-internal-card"><h3 style={{ marginBottom: 4 }}>Dati interni</h3><p className="small muted" style={{ marginBottom: 10 }}>Visibili solo agli amministratori.</p>
+    <div className="card" data-testid="detail-internal-card"><h3 style={{ marginBottom: 4 }}>Dati interni</h3><p className="small muted" style={{ marginBottom: 10 }}>Visibili solo agli amministratori. L'azienda decide anche i dati di pagamento mostrati all'affiliato.</p>
       <div style={{ display: "grid", gap: 12 }}>
-        <Field label="Azienda con cui è stato affiliato"><input type="text" list="dl-aziende" value={f.aziendaAffiliante} onChange={(e) => setF({ ...f, aziendaAffiliante: e.target.value })} placeholder="es. Alpimo srl" data-testid="internal-azienda" />{sugg("dl-aziende", opt?.aziende)}</Field>
+        <Field label="Azienda con cui è stato affiliato"><select value={f.aziendaId} onChange={(e) => setF({ ...f, aziendaId: e.target.value })} data-testid="internal-azienda">
+          <option value="">— Nessuna (pagamento predefinito) —</option>{(C || []).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></Field>
         <Field label="Piattaforma su cui è stato acquistato il dominio"><input type="text" list="dl-registrar" value={f.registrar} onChange={(e) => setF({ ...f, registrar: e.target.value })} placeholder="es. Aruba, Register.it, GoDaddy" data-testid="internal-registrar" />{sugg("dl-registrar", [...new Set([...(opt?.registrar || []), "Aruba", "Register.it", "GoDaddy", "OVH", "Namecheap", "SiteGround"])])}</Field>
         <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={() => A("internal", f, "Dati interni salvati")} data-testid="internal-save">Salva</button></div>
       </div>

@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Response
 from pydantic import BaseModel
 from core import (db, nowiso, uid, current_user, can, put_object, get_object, notify, notify_admins, send_mail, admin_email,
-                  aff_name, next_seq)
+                  aff_name, next_seq, scope_ids)
 
 router = APIRouter(prefix="/api")
 EXT_AFF = {"pdf", "jpg", "jpeg", "png", "webp", "gif", "heic"}
@@ -76,21 +76,31 @@ def nkey(u):
 VIEW_PERMS = {"affiliato": ["affiliati", "richieste"], "ticket": ["ticket"], "corsi": ["corsi"], "scadenze": ["scadenze", "affiliati"]}
 
 
-def nquery(u):
+async def nquery(u):
     q = {"to": nkey(u)}
     if u["role"] == "admin" and not u.get("is_super"):
-        q["view"] = {"$in": [None] + [v for v, ps in VIEW_PERMS.items() if any(can(u, p) for p in ps)]}
+        views = [v for v, ps in VIEW_PERMS.items() if any(can(u, p) for p in ps)]
+        ids = await scope_ids(u)
+        if ids is None:
+            q["view"] = {"$in": [None] + views}
+        else:
+            tids = [t["id"] for t in await db.tickets.find({"affId": {"$in": list(ids)}}, {"_id": 0, "id": 1}).to_list(10000)]
+            ors = [{"view": None}]
+            ors += [{"view": v, "ref": {"$in": list(ids)}} for v in views if v in ("affiliato", "scadenze")]
+            if "ticket" in views:
+                ors.append({"view": "ticket", "ref": {"$in": tids}})
+            q["$or"] = ors
     return q
 
 
 @router.get("/notifications")
 async def notifs(u=Depends(current_user)):
-    return await db.notifications.find(nquery(u), {"_id": 0}).sort("at", -1).to_list(40)
+    return await db.notifications.find(await nquery(u), {"_id": 0}).sort("at", -1).to_list(40)
 
 
 @router.post("/notifications/read-all")
 async def notifs_all(u=Depends(current_user)):
-    await db.notifications.update_many(nquery(u), {"$set": {"letto": True}})
+    await db.notifications.update_many(await nquery(u), {"$set": {"letto": True}})
     return {"ok": True}
 
 
@@ -126,6 +136,10 @@ async def tk_access(tid, u):
         raise HTTPException(403, "Accesso negato")
     if u["role"] == "admin" and not can(u, "ticket") and not can(u, "affiliati"):
         raise HTTPException(403, "Permesso negato")
+    if u["role"] == "admin":
+        ids = await scope_ids(u)
+        if ids is not None and t["affId"] not in ids:
+            raise HTTPException(404, "Ticket non trovato")
     return t
 
 
@@ -134,6 +148,10 @@ async def tickets(affId: str = "", u=Depends(current_user)):
     q = {"affId": u["id"]} if u["role"] == "affiliate" else ({"affId": affId} if affId else {})
     if u["role"] == "admin" and not (can(u, "ticket") or can(u, "affiliati")):
         raise HTTPException(403, "Permesso negato")
+    if u["role"] == "admin":
+        ids = await scope_ids(u)
+        if ids is not None:
+            q = {"affId": affId if affId in ids else {"$in": list(ids)}}
     L = await db.tickets.find(q, {"_id": 0}).sort("createdAt", -1).to_list(500)
     if u["role"] == "admin":
         names = {a["id"]: aff_name(a) for a in await db.affiliates.find({"id": {"$in": list({t["affId"] for t in L})}}, {"_id": 0}).to_list(1000)}

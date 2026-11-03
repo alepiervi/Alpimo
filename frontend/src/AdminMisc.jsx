@@ -59,8 +59,9 @@ export function AdminMats() {
 }
 
 export function Settings({ user }) {
-  const full = user.is_super || (user.perms || []).includes("impostazioni");
-  const tabs = [full && ["pag", "Dati pagamento"], full && ["pw", "Password affiliati"], full && ["legal", "Contratto e privacy"], user.is_super && ["team", "Team admin"], ["gen", "Generali"]].filter(Boolean);
+  const perm = user.is_super || (user.perms || []).includes("impostazioni");
+  const full = perm && (user.is_super || user.tutteAziende);
+  const tabs = [full && ["pag", "Pagamento predefinito"], user.is_super && ["aziende", "Aziende"], perm && ["pw", "Password affiliati"], full && ["legal", "Contratto e privacy"], user.is_super && ["team", "Team admin"], ["gen", "Generali"]].filter(Boolean);
   const [t, setT] = useState(tabs[0][0]);
   const [s, reload] = useLoad("/admin/settings");
   if (!s) return null;
@@ -68,17 +69,50 @@ export function Settings({ user }) {
     <div data-testid="admin-settings">
       <h2 style={{ marginBottom: 16 }}><Ico n="settings" s={22} />Impostazioni</h2>
       <div className="subtabs">{tabs.map(([k, l]) => <button key={k} className={t === k ? "on" : ""} onClick={() => setT(k)} data-testid={`settings-tab-${k}`}>{l}</button>)}</div>
-      {t === "pag" && <PagSettings s={s} reload={reload} />}
+      {t === "pag" && <><p className="muted" style={{ marginBottom: 12 }}>Usato per gli affiliati senza azienda o con un'azienda che non ha dati di pagamento propri.</p><PagSettings value={s.pag} onSave={(p) => put("/admin/settings", { pag: p })} reload={reload} /></>}
+      {t === "aziende" && <Companies />}
       {t === "pw" && <PwSettings />}
       {t === "legal" && <LegalSettings s={s} reload={reload} />}
-      {t === "team" && <Team />}
+      {t === "team" && <Team me={user} />}
       {t === "gen" && <General s={s} reload={reload} full={full} />}
     </div>
   );
 }
 
-function PagSettings({ s, reload }) {
-  const [p, setP] = useState(s.pag);
+function Companies() {
+  const [L, reload] = useLoad("/admin/companies");
+  const [sel, setSel] = useState(null);
+  const act = useAction();
+  const { ask } = useUI();
+  if (!L) return null;
+  if (sel) return <CompanyForm c={sel} back={() => { setSel(null); reload(); }} />;
+  const remove = async (c) => { if (await ask({ title: `Eliminare ${c.nome}?`, danger: true, ok: "Elimina" })) act(() => del(`/admin/companies/${c.id}`), "Azienda eliminata").then((r) => r && reload()); };
+  return (
+    <div data-testid="companies-settings">
+      <div className="row between" style={{ marginBottom: 12 }}><p className="muted">Ogni azienda può avere i propri dati di pagamento. Assegna l'azienda dalla scheda dell'affiliato (Dati interni).</p>
+        <button className="btn primary" onClick={() => setSel({ nome: "", pag: {} })} data-testid="company-new-btn">+ Nuova azienda</button></div>
+      <div className="card">{L.length ? L.map((c) => (
+        <div className="todo" key={c.id} data-testid="company-row"><div><b>{c.nome}</b><div className="small muted">{c.affiliati} affiliati · {c.pag?.iban ? `IBAN ${c.pag.iban}` : "usa il pagamento predefinito"}</div></div>
+          <div className="row"><button className="btn sm" onClick={() => setSel(c)} data-testid="company-edit">Modifica</button><button className="btn sm danger" onClick={() => remove(c)} data-testid="company-delete">Elimina</button></div></div>
+      )) : <Empty>Nessuna azienda. Creane una per assegnarle affiliati e modalità di pagamento.</Empty>}</div>
+    </div>
+  );
+}
+
+function CompanyForm({ c, back }) {
+  const [nome, setNome] = useState(c.nome);
+  return (
+    <div data-testid="company-form">
+      <button className="back" onClick={back}>← Aziende</button>
+      <div className="card" style={{ marginBottom: 14 }}><Field label="Nome azienda"><input type="text" value={nome} onChange={(e) => setNome(e.target.value)} data-testid="company-name" /></Field>
+        <p className="small muted" style={{ marginTop: 8 }}>Lascia vuoto l'IBAN per usare il pagamento predefinito.</p></div>
+      <PagSettings value={c.pag || {}} onSave={(p) => (c.id ? put(`/admin/companies/${c.id}`, { nome, pag: p }) : post("/admin/companies", { nome, pag: p }))} reload={back} />
+    </div>
+  );
+}
+
+function PagSettings({ value, onSave, reload }) {
+  const [p, setP] = useState(value);
   const act = useAction();
   const F = (k, l, ph) => <Field label={l}><input type="text" value={p[k] || ""} placeholder={ph} onChange={(e) => setP({ ...p, [k]: e.target.value })} data-testid={`pag-${k}`} /></Field>;
   return (
@@ -88,7 +122,7 @@ function PagSettings({ s, reload }) {
         <div className="grid3">{F("importo", "Imponibile attivazione €")}{F("iva", "IVA %")}{F("rinnovo", "Rinnovo dominio € (imponibile)")}</div>
         {F("causale", "Causale", "Usa {agenzia} e {url}")}{F("scadenza", "Termine di pagamento")}
         <Field label="Note"><textarea value={p.note || ""} onChange={(e) => setP({ ...p, note: e.target.value })} /></Field>
-        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={() => act(() => put("/admin/settings", { pag: p }), "Dati pagamento salvati").then((r) => r && reload())} data-testid="pag-save">Salva</button></div>
+        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={() => act(() => onSave(p), "Dati pagamento salvati").then((r) => r && reload())} data-testid="pag-save">Salva</button></div>
       </div></div>
       <div className="card"><h3 style={{ marginBottom: 10 }}>Anteprima per l'affiliato</h3><PayBox pag={p} a={{ nomeAgenzia: "Agenzia Esempio", urlDef: "agenziaesempio.it" }} /><p className="small muted" style={{ marginTop: 8 }}>Totale attivazione: {eur((parseFloat(p.importo) || 0) * (1 + (parseFloat(p.iva) || 0) / 100))}</p></div>
     </div>
@@ -125,27 +159,41 @@ function LegalSettings({ s, reload }) {
   );
 }
 
-function Team() {
+function Team({ me }) {
   const [L, reload] = useLoad("/admin/team");
+  const [C] = useLoad("/admin/companies");
   const [f, setF] = useState(null);
   const act = useAction();
-  if (!L) return null;
-  const save = async () => { const r = await act(() => (f.id ? put(`/admin/team/${f.id}`, f) : post("/admin/team", f)), "Collaboratore salvato"); if (r) { setF(null); reload(); } };
+  if (!L || !C) return null;
+  const save = async () => { const r = await act(() => (f.id ? put(`/admin/team/${f.id}`, f) : post("/admin/team", f)), "Utente salvato"); if (r) { setF(null); reload(); } };
+  const cn = Object.fromEntries(C.map((c) => [c.id, c.nome]));
+  const scope = (u) => (u.is_super || u.tutteAziende ? "tutte le aziende" : (u.aziende || []).map((x) => cn[x]).filter(Boolean).join(", ") || "nessuna azienda");
+  const edit = (u) => setF({ ...u, password: "", full: !!u.is_super, tutteAziende: !!u.tutteAziende, aziende: u.aziende || [], perms: u.perms || [] });
+  const tog = (k, id, on) => setF({ ...f, [k]: on ? [...f[k], id] : f[k].filter((x) => x !== id) });
   return (
     <div data-testid="team-settings">
-      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 12 }}><button className="btn primary" onClick={() => setF({ nome: "", email: "", password: genPw(), perms: [], active: true })} data-testid="team-new-btn">+ Aggiungi collaboratore</button></div>
+      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 12 }}><button className="btn primary" onClick={() => setF({ nome: "", email: "", password: genPw(), perms: [], active: true, full: false, tutteAziende: false, aziende: [] })} data-testid="team-new-btn">+ Aggiungi utente</button></div>
       {f && <div className="card" style={{ marginBottom: 16 }} data-testid="team-form"><div style={{ display: "grid", gap: 12 }}>
         <div className="grid3"><Field label="Nome"><input type="text" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} data-testid="team-name" /></Field>
           <Field label="Email"><input type="email" value={f.email} disabled={!!f.id} onChange={(e) => setF({ ...f, email: e.target.value })} data-testid="team-email" /></Field>
           <Field label={f.id ? "Nuova password (facoltativa)" : "Password"}><input type="text" value={f.password || ""} onChange={(e) => setF({ ...f, password: e.target.value })} data-testid="team-password" /></Field></div>
-        <div className="lbl">Permessi</div>
-        <div className="permgrid">{Object.entries(PERMS).map(([k, l]) => <label className="chk" key={k}><input type="checkbox" checked={f.perms.includes(k)} onChange={(e) => setF({ ...f, perms: e.target.checked ? [...f.perms, k] : f.perms.filter((x) => x !== k) })} data-testid={`team-perm-${k}`} />{l}</label>)}</div>
-        <label className="chk"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} data-testid="team-active" />Attivo</label>
-        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" onClick={() => setF(null)}>Annulla</button><button className="btn primary" onClick={save} data-testid="team-save">Salva {f.id ? "" : "e invia credenziali"}</button></div>
+        {!f.is_master && <label className="chk"><input type="checkbox" checked={f.full} onChange={(e) => setF({ ...f, full: e.target.checked })} data-testid="team-full" /><span><b>Accesso completo come il Master</b> · vede tutti gli affiliati di tutte le aziende, ha tutti i permessi e gestisce il team</span></label>}
+        {!f.full && (<>
+          <div className="lbl">Quali affiliati vede</div>
+          <div className="seg"><label><input type="radio" checked={f.tutteAziende} onChange={() => setF({ ...f, tutteAziende: true })} data-testid="team-scope-all" />Tutte le aziende</label>
+            <label><input type="radio" checked={!f.tutteAziende} onChange={() => setF({ ...f, tutteAziende: false })} data-testid="team-scope-some" />Solo le aziende selezionate</label></div>
+          {!f.tutteAziende && (C.length ? <div className="permgrid">{C.map((c) => <label className="chk" key={c.id}><input type="checkbox" checked={f.aziende.includes(c.id)} onChange={(e) => tog("aziende", c.id, e.target.checked)} data-testid={`team-company-${c.id}`} />{c.nome}</label>)}</div>
+            : <div className="note warn small">Nessuna azienda creata: aggiungile in Impostazioni &gt; Aziende.</div>)}
+          <div className="lbl">Permessi</div>
+          <div className="permgrid">{Object.entries(PERMS).map(([k, l]) => <label className="chk" key={k}><input type="checkbox" checked={f.perms.includes(k)} onChange={(e) => tog("perms", k, e.target.checked)} data-testid={`team-perm-${k}`} />{l}</label>)}</div>
+        </>)}
+        {!f.is_master && <label className="chk"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} data-testid="team-active" />Attivo</label>}
+        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" onClick={() => setF(null)}>Annulla</button><button className="btn primary" onClick={save} data-testid="team-save">Salva</button></div>
       </div></div>}
       <div className="card">{L.map((u) => (
-        <div className="todo" key={u.id} data-testid="team-row"><div><b>{u.nome || u.email}</b> {u.is_super && <Badge k="accent">Principale</Badge>} {!u.active && <Badge k="bad">Disattivato</Badge>}<div className="small muted">{u.email} · {u.is_super ? "tutti i permessi" : (u.perms || []).map((p) => PERMS[p]?.split(" ")[0]).join(", ") || "nessun permesso"}</div></div>
-          {!u.is_super && <button className="btn sm" onClick={() => setF({ ...u, password: "" })} data-testid="team-edit">Modifica</button>}</div>
+        <div className="todo" key={u.id} data-testid="team-row"><div><b>{u.nome || u.email}</b> {u.is_master ? <Badge k="accent">Master</Badge> : u.is_super && <Badge k="info">Accesso completo</Badge>} {!u.active && <Badge k="bad">Disattivato</Badge>}
+          <div className="small muted">{u.email} · {u.is_super ? "tutti i permessi" : (u.perms || []).map((p) => PERMS[p]?.split(" ")[0]).join(", ") || "nessun permesso"} · vede: {scope(u)}</div></div>
+          {(!u.is_master || me.is_master) && <button className="btn sm" onClick={() => edit(u)} data-testid="team-edit">Modifica</button>}</div>
       ))}</div>
     </div>
   );
