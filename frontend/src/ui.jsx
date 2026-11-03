@@ -138,3 +138,25 @@ export function Inp({ v, set, k, ...p }) {
 }
 
 export const Empty = ({ children }) => <div className="empty">{children}</div>;
+
+const toIt = (iso) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : "");
+
+export function DateInput({ value, onChange, testid }) {
+  const [t, setT] = useState(toIt(value));
+  const [bad, setBad] = useState(false);
+  useEffect(() => { if (value) { setT(toIt(value)); setBad(false); } }, [value]);
+  const type = (e) => {
+    const d = e.target.value.replace(/\D/g, "").slice(0, 8);
+    const s = d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+    setT(s);
+    if (d.length === 8) {
+      const iso = `${d.slice(4)}-${d.slice(2, 4)}-${d.slice(0, 2)}`;
+      const [dd, mm, yy] = [+d.slice(0, 2), +d.slice(2, 4), +d.slice(4)];
+      const dt = new Date(yy, mm - 1, dd);
+      const ok = yy > 1900 && dt.getFullYear() === yy && dt.getMonth() === mm - 1 && dt.getDate() === dd;
+      setBad(!ok);
+      onChange(ok ? iso : "");
+    } else { setBad(d.length > 0); onChange(""); }
+  };
+  return <input type="text" inputMode="numeric" placeholder="gg/mm/aaaa" value={t} onChange={type} style={bad ? { borderColor: "var(--bad)" } : undefined} data-testid={testid} />;
+}

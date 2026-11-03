@@ -1,14 +1,6 @@
 # Test credentials – Portale Affiliati Alpimo
 
-| Ruolo | Email | Password |
-|---|---|---|
-| Admin di prova admin@alpimo.it | DISATTIVATO | — |
-| Affiliato in attesa di approvazione | sole@demo.it | demo1234 |
-| Affiliato approvato (loghi pronti, URL verificati) | mario@demo.it | demo1234 |
-| Affiliato con sito consegnato (dominio in scadenza tra 6 gg) | blu@demo.it | demo1234 |
-
-Auth endpoints: POST /api/auth/register, /api/auth/login, /api/auth/logout, /api/auth/refresh, GET /api/auth/me,
-POST /api/auth/verify, /api/auth/resend, /api/auth/forgot, /api/auth/reset, /api/auth/accept-terms, /api/auth/change-password.
-
-Codes for email verification / password reset are visible to the admin in "Registro email" (GET /api/admin/emails),
-because real email sending (Aruba/Brevo) is not configured yet.
+- Demo/test data removed on request (no demo affiliates, no test admins).
+- The only admin is the owner's private account: its password is intentionally NOT stored here. Do not create or log it.
+- For tests, register throwaway affiliates via the UI/API (verification code readable by an admin in GET /api/admin/emails)
+  and ask the main agent/user for a temporary admin; delete test data afterwards.

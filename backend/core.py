@@ -314,3 +314,7 @@ def url_def(a):
     if i is None:
         return ""
     return (a.get("urls") or [{}] * 3)[i].get("value", "")
+
+
+def itd(iso):
+    return date.fromisoformat(iso[:10]).strftime("%d/%m/%Y") if iso else ""

@@ -65,9 +65,9 @@ export const PAYST = { pagato: ["Pagato", "ok"], in_verifica: ["In verifica", "w
 export function fd(x) {
   if (!x) return "—";
   const d = typeof x === "string" && x.length === 10 ? new Date(x + "T00:00") : new Date(x);
-  return d.toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" });
+  return d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
-export const fdt = (x) => new Date(x).toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+export const fdt = (x) => new Date(x).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 export function eur(v) { const n = parseFloat(String(v).replace(",", ".")); return isNaN(n) ? "" : n.toLocaleString("it-IT", { style: "currency", currency: "EUR" }); }
 export function daysTo(iso) { const t = new Date(new Date().toISOString().slice(0, 10) + "T00:00"); return Math.round((new Date(iso + "T00:00") - t) / 86400000); }
 export function affName(a) {

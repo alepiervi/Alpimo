@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from core import (db, nowiso, today, uid, admin_user, need, super_user, can, get_settings, notify, notify_admins, send_mail, aff_name,
-                  url_def, enc, dec, file_info, add_biz, add_year, days_to, hash_pw, next_seq, PERMS, email_status)
+                  url_def, enc, dec, file_info, itd, add_biz, add_year, days_to, hash_pw, next_seq, PERMS, email_status)
 from routes_aff import billing_errors
 
 router = APIRouter(prefix="/api/admin")
@@ -211,8 +211,8 @@ async def payment(aid: str, body: PayIn, u=Depends(need("affiliati"))):
                                                               "consegna": {"inizio": start, "giorni": body.giorni, "dataPrevista": prev, "fase": 1},
                                                               "dominio.scadenza": a["dominio"].get("scadenza") or add_year(start)}})
         await db.payments.update_one({"affId": aid, "kind": "attivazione"}, {"$set": {"stato": "pagato", "pagatoAt": nowiso()}})
-        await send_mail(a["email"], "Pagamento confermato: lavori avviati", f"Ciao {ag},\n\nabbiamo confermato il tuo pagamento e i lavori per il sito {url_def(a)} sono iniziati.\nData di consegna prevista: {prev}.\n\nDa oggi hai accesso ai corsi dell'Academy affiliati.", aid)
-        await notify(aid, f"Pagamento confermato! Consegna prevista il <b>{prev}</b>. Corsi sbloccati.", "percorso")
+        await send_mail(a["email"], "Pagamento confermato: lavori avviati", f"Ciao {ag},\n\nabbiamo confermato il tuo pagamento e i lavori per il sito {url_def(a)} sono iniziati.\nData di consegna prevista: {itd(prev)}.\n\nDa oggi hai accesso ai corsi dell'Academy affiliati.", aid)
+        await notify(aid, f"Pagamento confermato! Consegna prevista il <b>{itd(prev)}</b>. Corsi sbloccati.", "percorso")
     else:
         if not body.nota.strip():
             raise HTTPException(400, "Indica il motivo")
@@ -304,7 +304,7 @@ async def renew(aid: str, u=Depends(need("scadenze"))):
     iva = float(str(s["pag"].get("iva") or 0).replace(",", ".") or 0)
     await db.affiliates.update_one({"id": aid}, {"$set": {"dominio.scadenza": new, "dominio.inviati": []},
                                                  "$push": {"dominio.storico": {"da": sc, "a": new, "at": nowiso()}}})
-    await db.payments.insert_one({"id": uid(), "affId": aid, "kind": "rinnovo", "descrizione": f"Rinnovo dominio {url_def(a)} fino al {date.fromisoformat(new).strftime('%d/%m/%Y')}", "imponibile": imp,
+    await db.payments.insert_one({"id": uid(), "affId": aid, "kind": "rinnovo", "descrizione": f"Rinnovo dominio {url_def(a)} fino al {itd(new)}", "imponibile": imp,
                                   "iva": iva, "totale": round(imp * (1 + iva / 100), 2), "stato": "pagato", "ricevuta": None, "nota": "", "at": nowiso(), "invoice": None})
     return {"ok": True, "scadenza": new}
 
@@ -732,7 +732,7 @@ async def domain_job():
             continue
         r = min(due)
         ag, url = aff_name(a), url_def(a)
-        await send_mail(adm, f"Dominio in scadenza tra {d} giorni: {url}", f"Il dominio {url} di {ag} scade il {a['dominio']['scadenza']} (tra {d} giorni).\nRicordati di rinnovarlo e segnarlo come pagato nel portale.", a["id"])
-        await send_mail(a["email"], f"Il tuo dominio {url} scade tra {d} giorni", f"Ciao {ag},\n\nil dominio {url} scade il {a['dominio']['scadenza']}. Ti contatteremo per il rinnovo.", a["id"])
+        await send_mail(adm, f"Dominio in scadenza tra {d} giorni: {url}", f"Il dominio {url} di {ag} scade il {itd(a['dominio']['scadenza'])} (tra {d} giorni).\nRicordati di rinnovarlo e segnarlo come pagato nel portale.", a["id"])
+        await send_mail(a["email"], f"Il tuo dominio {url} scade tra {d} giorni", f"Ciao {ag},\n\nil dominio {url} scade il {itd(a['dominio']['scadenza'])}. Ti contatteremo per il rinnovo.", a["id"])
         await notify_admins(f"Dominio <b>{url}</b> in scadenza tra {d} giorni", "scadenze", a["id"])
         await db.affiliates.update_one({"id": a["id"]}, {"$addToSet": {"dominio.inviati": {"$each": [x for x in REM if x >= r]}}})

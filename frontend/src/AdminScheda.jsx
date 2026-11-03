@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Badge, useLoad, useAction, useUI, UploadBox, FileChip, Field, Empty, Ico } from "./ui.jsx";
+import { Badge, useLoad, useAction, useUI, UploadBox, FileChip, Field, Empty, Ico, DateInput } from "./ui.jsx";
 import { post, put, fileUrl, fd, fdt, FASI, DOCT, statoInfo, genPw, STEPS } from "./lib.js";
 import { DatiKV } from "./Aff.jsx";
 import { BillingForm, PayTable } from "./AffTabs.jsx";
@@ -88,7 +88,7 @@ function ConsegnaCard({ a, A }) {
   useEffect(() => setD(a.consegna.dataPrevista), [a.consegna.dataPrevista]);
   return (
     <div className="card" data-testid="detail-delivery-card"><h3 style={{ marginBottom: 10 }}>Tempi di consegna</h3>
-      <div className="row"><Field label="Data prevista"><input type="date" value={d} onChange={(e) => setD(e.target.value)} data-testid="delivery-date-input" /></Field><button className="btn sm" style={{ alignSelf: "flex-end" }} onClick={() => A("consegna", { dataPrevista: d }, "Data aggiornata")} data-testid="delivery-date-save">Salva data</button></div>
+      <div className="row"><Field label="Data prevista"><DateInput value={d} onChange={setD} testid="delivery-date-input" /></Field><button className="btn sm" style={{ alignSelf: "flex-end" }} disabled={!d} onClick={() => A("consegna", { dataPrevista: d }, "Data aggiornata")} data-testid="delivery-date-save">Salva data</button></div>
       <div className="fasi">{FASI.map((f, i) => <div key={f} className={i < a.consegna.fase ? "done" : i === a.consegna.fase ? "cur" : ""} style={{ cursor: "pointer" }} onClick={() => A("consegna", { fase: i }, "Fase aggiornata")} data-testid={`phase-${i}`}>{f}</div>)}</div>
     </div>
   );
@@ -123,7 +123,7 @@ function DomCard({ a, A }) {
   useEffect(() => setD(a.dominio.scadenza || ""), [a.dominio.scadenza]);
   return (
     <div className="card" data-testid="detail-domain-card"><h3 style={{ marginBottom: 10 }}>Scadenza dominio</h3>
-      <div className="row"><Field label="Scadenza"><input type="date" value={d} onChange={(e) => setD(e.target.value)} data-testid="domain-date-input" /></Field><button className="btn sm" style={{ alignSelf: "flex-end" }} onClick={() => A("domain", { scadenza: d }, "Scadenza aggiornata")} data-testid="domain-date-save">Salva</button>
+      <div className="row"><Field label="Scadenza"><DateInput value={d} onChange={setD} testid="domain-date-input" /></Field><button className="btn sm" style={{ alignSelf: "flex-end" }} disabled={!d} onClick={() => A("domain", { scadenza: d }, "Scadenza aggiornata")} data-testid="domain-date-save">Salva</button>
         {a.dominio.scadenza && <button className="btn sm primary" style={{ alignSelf: "flex-end" }} onClick={() => A("renew", {}, "Rinnovo registrato: +1 anno")} data-testid="detail-renew">Rinnovo pagato (+1 anno)</button>}</div>
       {a.dominio.scadenza && <div style={{ marginTop: 10 }}><RemChips r={{ scadenza: a.dominio.scadenza, inviati: a.dominio.inviati }} /></div>}
       {a.dominio.storico?.length > 0 && <><h4>Storico rinnovi</h4>{a.dominio.storico.map((s, i) => <div key={i} className="small">{fd(s.da)} → {fd(s.a)} · registrato {fd(s.at)}</div>)}</>}

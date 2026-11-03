@@ -25,6 +25,11 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 
 ## Backlog
 - P0: inserire credenziali ARUBA_SMTP_USER / ARUBA_SMTP_PASSWORD e BREVO_API_KEY / BREVO_SENDER_EMAIL (email ora solo registrate)
-- P1: date picker in formato italiano; streaming video con range
+- P1: streaming video con range
 - Fatto (03/11/2026): video MP4 dei corsi protetti lato server (Premium solo dopo acquisto confermato; tutti i video solo con pagamento sito confermato e corso pubblicato)
 - P2: suddividere routes_admin.py; job domini idempotente su più repliche
+
+## 03/11/2026 – aggiornamento
+- Rimossi tutti i dati di prova (affiliati demo, collaboratori test, admin di prova, materiali/corsi/news TEST, IBAN di esempio); il seed non crea più affiliati demo né IBAN di esempio
+- Unico admin: account privato del titolare (password non registrata nei file); email notifiche admin impostata sul suo indirizzo
+- Date in formato gg/mm/aaaa ovunque (campi di modifica con validazione, visualizzazione, email)
