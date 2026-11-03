@@ -23,6 +23,7 @@ export default function Scheda({ id, user, back }) {
       </div>
       <div className="sch-grid">
         <div className="card"><h3 style={{ marginBottom: 10 }}>Dati anagrafici</h3><DatiKV a={a} />{a.stato === "rifiutata" && <div className="note bad" style={{ marginTop: 10 }}>Rifiutata: {a.nota}</div>}</div>
+        <InternalCard {...P} />
         <UrlCard {...P} />
         <LogoCard {...P} />
         <PayCard {...P} />
@@ -37,6 +38,22 @@ export default function Scheda({ id, user, back }) {
         <PaymentsCard {...P} />
         <div className="card"><h3 style={{ marginBottom: 10 }}>Avanzamento corsi</h3>{a.progress.length ? a.progress.map((p, i) => <div className="todo" key={i}><span>{p.titolo}</span><span className="small">{p.fatte}/{p.tot} video {p.completatoAt && <Badge k="ok">Completato</Badge>}</span></div>) : <Empty>Nessun corso iniziato.</Empty>}</div>
         <div className="card"><h3 style={{ marginBottom: 10 }}>Ticket</h3>{a.tickets.length ? a.tickets.map((t) => <div className="todo" key={t.id}><span><span className="tknum">#{t.num}</span>{t.oggetto}</span><Badge k={t.stato === "chiuso" ? "ok" : "warn"}>{t.stato}</Badge></div>) : <Empty>Nessun ticket.</Empty>}</div>
+      </div>
+    </div>
+  );
+}
+
+function InternalCard({ a, A }) {
+  const [f, setF] = useState({ aziendaAffiliante: a.aziendaAffiliante || "", registrar: a.registrar || "" });
+  const [opt] = useLoad("/admin/internal-options");
+  useEffect(() => setF({ aziendaAffiliante: a.aziendaAffiliante || "", registrar: a.registrar || "" }), [a.aziendaAffiliante, a.registrar]);
+  const sugg = (id, L) => <datalist id={id}>{(L || []).map((x) => <option key={x} value={x} />)}</datalist>;
+  return (
+    <div className="card" data-testid="detail-internal-card"><h3 style={{ marginBottom: 4 }}>Dati interni</h3><p className="small muted" style={{ marginBottom: 10 }}>Visibili solo agli amministratori.</p>
+      <div style={{ display: "grid", gap: 12 }}>
+        <Field label="Azienda con cui è stato affiliato"><input type="text" list="dl-aziende" value={f.aziendaAffiliante} onChange={(e) => setF({ ...f, aziendaAffiliante: e.target.value })} placeholder="es. Alpimo srl" data-testid="internal-azienda" />{sugg("dl-aziende", opt?.aziende)}</Field>
+        <Field label="Piattaforma su cui è stato acquistato il dominio"><input type="text" list="dl-registrar" value={f.registrar} onChange={(e) => setF({ ...f, registrar: e.target.value })} placeholder="es. Aruba, Register.it, GoDaddy" data-testid="internal-registrar" />{sugg("dl-registrar", [...new Set([...(opt?.registrar || []), "Aruba", "Register.it", "GoDaddy", "OVH", "Namecheap", "SiteGround"])])}</Field>
+        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={() => A("internal", f, "Dati interni salvati")} data-testid="internal-save">Salva</button></div>
       </div>
     </div>
   );
@@ -57,11 +74,12 @@ function UrlCard({ a, A }) {
 function LogoCard({ a, A, id }) {
   return (
     <div className="card" data-testid="detail-logo-card"><h3 style={{ marginBottom: 10 }}>Loghi proposti</h3>
-      <div className="logos">{[0, 1, 2].map((i) => { const f = a.loghiInfo[i]; return (
+      {a.sceltaFinale && <p className="small muted" style={{ marginBottom: 8 }}>Scelta definitiva: le proposte non scelte sono state eliminate.</p>}
+      <div className="logos">{[0, 1, 2].filter((i) => !a.sceltaFinale || i === a.logoScelto).map((i) => { const f = a.loghiInfo[i]; return (
         <div key={i} className={`logo-slot ${a.logoScelto === i ? "chosen" : ""}`} data-testid={`logo-slot-${i}`}>
           <div className="row between"><b>Logo {i + 1}</b>{a.logoScelto === i && <Badge k="accent">Scelto</Badge>}</div>
           <div className="img">{f ? <img src={fileUrl(f.id)} alt="" /> : <span className="small muted">Vuoto</span>}</div>
-          {f ? <button className="btn sm" onClick={() => A("logo", { idx: i, file: null }, "Logo rimosso")} data-testid={`logo-remove-${i}`}>Rimuovi</button>
+          {f ? (!a.sceltaFinale && <button className="btn sm" onClick={() => A("logo", { idx: i, file: null }, "Logo rimosso")} data-testid={`logo-remove-${i}`}>Rimuovi</button>)
             : <UploadBox small label="Carica" hint="PNG, JPG o SVG" accept="image/*,.svg" owner={id} testid={`logo-upload-${i}`} onDone={(r) => A("logo", { idx: i, file: r.id }, "Logo caricato")} />}
         </div>); })}</div>
     </div>

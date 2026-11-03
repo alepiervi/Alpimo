@@ -116,14 +116,14 @@ function Affiliati({ nav }) {
   const [L] = useLoad("/admin/affiliates");
   const [q, setQ] = useState("");
   if (!L) return null;
-  const V = L.filter((r) => !q || `${r.nome} ${r.email} ${r.url} ${r.citta}`.toLowerCase().includes(q.toLowerCase()));
+  const V = L.filter((r) => !q || `${r.nome} ${r.email} ${r.url} ${r.citta} ${r.aziendaAffiliante} ${r.registrar}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <div data-testid="admin-affiliates">
       <div className="row between" style={{ marginBottom: 16 }}><h2><Ico n="users" s={22} />Affiliati</h2>
         <div className="row"><input type="text" placeholder="Cerca…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 240 }} data-testid="affiliates-search" /><button className="btn" onClick={() => downloadUrl(`${API}/admin/export/affiliati`)} data-testid="export-affiliati">Export CSV</button></div></div>
-      <div className="card tablewrap"><table className="resp"><thead><tr><th>Agenzia</th><th>Stato</th><th>Tappa</th><th>URL</th><th>Scadenza dominio</th></tr></thead>
+      <div className="card tablewrap"><table className="resp"><thead><tr><th>Agenzia</th><th>Azienda affiliante</th><th>Stato</th><th>Tappa</th><th>URL</th><th>Scadenza dominio</th></tr></thead>
         <tbody>{V.map((r) => { const [l, k] = statoInfo(r); return (
-          <tr key={r.id} className="click" onClick={() => nav("affiliati", r.id)} data-testid="affiliate-row"><td data-l="Agenzia"><b>{r.nome}</b><div className="small muted">{r.email}</div></td><td data-l="Stato"><Badge k={k}>{l}</Badge></td><td data-l="Tappa">{STEPS[r.step]}</td><td data-l="URL" className="mono">{r.url || "—"}</td><td data-l="Scadenza">{fd(r.scadenza)}</td></tr>); })}</tbody></table></div>
+          <tr key={r.id} className="click" onClick={() => nav("affiliati", r.id)} data-testid="affiliate-row"><td data-l="Agenzia"><b>{r.nome}</b><div className="small muted">{r.email}</div></td><td data-l="Azienda affiliante">{r.aziendaAffiliante || "—"}</td><td data-l="Stato"><Badge k={k}>{l}</Badge></td><td data-l="Tappa">{STEPS[r.step]}</td><td data-l="URL"><span className="mono">{r.url || "—"}</span>{r.registrar && <div className="small muted">su {r.registrar}</div>}</td><td data-l="Scadenza">{fd(r.scadenza)}</td></tr>); })}</tbody></table></div>
     </div>
   );
 }
@@ -142,7 +142,7 @@ function Scadenze({ nav, canOpen }) {
       <div className="row between" style={{ marginBottom: 16 }}><h2><Ico n="calendar" s={22} />Scadenze domini</h2><button className="btn" onClick={() => downloadUrl(`${API}/admin/export/scadenze`)}>Export CSV</button></div>
       <div className="card tablewrap"><table className="resp"><thead><tr><th>Dominio</th><th>Scadenza</th><th>Promemoria</th><th /></tr></thead>
         <tbody>{L.map((r) => { const d = daysTo(r.scadenza); return (
-          <tr key={r.id} data-testid="domain-row"><td data-l="Dominio"><b className="mono">{r.url}</b><div className="small muted">{canOpen ? <a href="#a" onClick={(e) => { e.preventDefault(); nav("affiliati", r.id); }}>{r.nome}</a> : r.nome}</div></td>
+          <tr key={r.id} data-testid="domain-row"><td data-l="Dominio"><b className="mono">{r.url}</b> {r.registrar && <Badge k="neutral">{r.registrar}</Badge>}<div className="small muted">{canOpen ? <a href="#a" onClick={(e) => { e.preventDefault(); nav("affiliati", r.id); }}>{r.nome}</a> : r.nome}</div></td>
             <td data-l="Scadenza">{fd(r.scadenza)}<div><Badge k={d <= 7 ? "bad" : d <= 30 ? "warn" : "ok"}>{d < 0 ? "Scaduto" : `${d} giorni`}</Badge></div></td><td data-l="Promemoria"><RemChips r={r} /></td>
             <td><button className="btn sm primary" onClick={() => act(() => post(`/admin/affiliates/${r.id}/renew`), "Rinnovo registrato: +1 anno").then((r) => r && reload())} data-testid="domain-renew">Rinnovo pagato</button></td></tr>); })}</tbody></table>
         {!L.length && <Empty>Nessun dominio attivo.</Empty>}</div>

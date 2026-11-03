@@ -34,3 +34,5 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 - Unico admin: account privato del titolare (password non registrata nei file); email notifiche admin impostata sul suo indirizzo
 - Date in formato gg/mm/aaaa ovunque (campi di modifica con validazione, visualizzazione, email)
 - Verifica email affiliati sospesa finché Aruba/Brevo non sono configurati (registrazione = verificato); riparte automaticamente per le nuove registrazioni appena una credenziale email è presente
+- Logo + URL definitivo scelti => proposte non scelte eliminate (sceltaFinale), scelta bloccata
+- Dati interni admin: azienda affiliante e piattaforma acquisto dominio (in lista, scadenze, export CSV; nascosti all affiliato)

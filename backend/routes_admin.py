@@ -43,7 +43,8 @@ def row(a, users):
             "online": a.get("online"), "richiestaOnline": a.get("richiestaOnline"), "scadenza": a["dominio"].get("scadenza"),
             "inviati": a["dominio"].get("inviati", []), "verified": u.get("verified"), "createdAt": a.get("createdAt"),
             "submittedAt": a.get("submittedAt"), "nota": a.get("nota"), "consegna": a.get("consegna"), "loghi": a.get("loghi"),
-            "logoScelto": a.get("logoScelto"), "urlDefinitivo": a.get("urlDefinitivo")}
+            "logoScelto": a.get("logoScelto"), "urlDefinitivo": a.get("urlDefinitivo"), "sceltaFinale": a.get("sceltaFinale", False),
+            "aziendaAffiliante": a.get("aziendaAffiliante", ""), "registrar": a.get("registrar", "")}
 
 
 async def all_rows():
@@ -64,7 +65,7 @@ async def dashboard(u=Depends(admin_user)):
                 todo.append({"k": "ricevuta", "t": f"Ricevuta da verificare: {r['nome']}", "id": r["id"]})
             if r["stato"] == "accettata" and any(x["value"] and x["stato"] == "da_verificare" for x in r["urls"]) and r["urlDefinitivo"] is None:
                 todo.append({"k": "url", "t": f"URL da verificare: {r['nome']}", "id": r["id"]})
-            if r["stato"] == "accettata" and not all(r["loghi"] or [None]):
+            if r["stato"] == "accettata" and not r.get("sceltaFinale") and not all(r["loghi"] or [None]):
                 todo.append({"k": "loghi", "t": f"Loghi da caricare: {r['nome']}", "id": r["id"]})
             if r["richiestaOnline"] and not r["online"]:
                 todo.append({"k": "online", "t": f"Richiesta messa online: {r['nome']}", "id": r["id"]})
@@ -278,6 +279,24 @@ async def online(aid: str, u=Depends(need("affiliati"))):
     await send_mail(a["email"], "Il tuo sito è online!", f"Ciao {aff_name(a)},\n\nil sito {url_def(a)} è ora online e la password di anteprima è stata disattivata.", aid)
     await notify(aid, "Il tuo sito è <b>online</b>!", "percorso")
     return {"ok": True}
+
+
+class InternalIn(BaseModel):
+    aziendaAffiliante: str = ""
+    registrar: str = ""
+
+
+@router.post("/affiliates/{aid}/internal")
+async def internal(aid: str, body: InternalIn, u=Depends(need("affiliati"))):
+    await get_aff(aid)
+    await db.affiliates.update_one({"id": aid}, {"$set": {"aziendaAffiliante": body.aziendaAffiliante.strip(), "registrar": body.registrar.strip()}})
+    return {"ok": True}
+
+
+@router.get("/internal-options")
+async def internal_options(u=Depends(admin_user)):
+    return {"aziende": sorted(x for x in await db.affiliates.distinct("aziendaAffiliante") if x),
+            "registrar": sorted(x for x in await db.affiliates.distinct("registrar") if x)}
 
 
 class DomIn(BaseModel):
@@ -602,11 +621,11 @@ async def export(kind: str, u=Depends(admin_user)):
     affs = await db.affiliates.find({}, {"_id": 0}).to_list(5000)
     names = {a["id"]: aff_name(a) for a in affs}
     if kind == "affiliati":
-        H = ["Agenzia", "Email", "Tipo", "Città", "Telefono", "Stato", "Pagamento", "URL", "Scadenza dominio", "Intestatario", "CF", "P.IVA", "SDI", "PEC", "Indirizzo", "CAP", "Città fatt.", "Prov."]
+        H = ["Agenzia", "Email", "Tipo", "Città", "Telefono", "Stato", "Pagamento", "URL", "Scadenza dominio", "Azienda affiliante", "Piattaforma dominio", "Intestatario", "CF", "P.IVA", "SDI", "PEC", "Indirizzo", "CAP", "Città fatt.", "Prov."]
         rows = []
         for a in affs:
             f = a.get("fatturazione") or {}
-            rows.append([aff_name(a), a["email"], a["tipo"], a.get("citta"), a.get("telefono"), a["stato"], a["pagamento"], url_def(a), a["dominio"].get("scadenza")] +
+            rows.append([aff_name(a), a["email"], a["tipo"], a.get("citta"), a.get("telefono"), a["stato"], a["pagamento"], url_def(a), a["dominio"].get("scadenza"), a.get("aziendaAffiliante", ""), a.get("registrar", "")] +
                         [f.get(k, "") for k in ("intestatario", "cf", "piva", "sdi", "pec", "indirizzo", "cap", "citta", "provincia")])
         return csv_resp("affiliati", H, rows)
     if kind == "pagamenti":
@@ -615,8 +634,8 @@ async def export(kind: str, u=Depends(admin_user)):
                         [[p["at"][:10], names.get(p["affId"]), p["kind"], p["descrizione"], str(p["imponibile"]).replace(".", ","), p["iva"], str(p["totale"]).replace(".", ","), p["stato"], (p.get("invoice") or {}).get("numero", "")] for p in L])
     if kind == "scadenze":
         L = sorted([a for a in affs if a["dominio"].get("scadenza")], key=lambda a: a["dominio"]["scadenza"])
-        return csv_resp("scadenze", ["Agenzia", "URL", "Scadenza", "Giorni mancanti", "Promemoria inviati"],
-                        [[aff_name(a), url_def(a), a["dominio"]["scadenza"], days_to(a["dominio"]["scadenza"]), ",".join(str(x) for x in a["dominio"].get("inviati", []))] for a in L])
+        return csv_resp("scadenze", ["Agenzia", "URL", "Piattaforma", "Scadenza", "Giorni mancanti", "Promemoria inviati"],
+                        [[aff_name(a), url_def(a), a.get("registrar", ""), a["dominio"]["scadenza"], days_to(a["dominio"]["scadenza"]), ",".join(str(x) for x in a["dominio"].get("inviati", []))] for a in L])
     if kind == "corsi":
         cs = {c["id"]: c for c in await db.courses.find({}, {"_id": 0}).to_list(500)}
         L = await db.progress.find({}, {"_id": 0}).to_list(10000)

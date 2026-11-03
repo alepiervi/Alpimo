@@ -50,7 +50,8 @@ async def view_aff(a, s=None):
     s = s or await get_settings()
     out = dict(a)
     out["cred"] = dec(a.get("cred")) if a.get("consegnato") else {}
-    out.pop("superAdmin", None)
+    for k in ("superAdmin", "aziendaAffiliante", "registrar"):
+        out.pop(k, None)
     out["loghiInfo"] = [await file_info(x) for x in a.get("loghi") or [None] * 3]
     out["ricevutaInfo"] = await file_info(a.get("ricevuta"))
     out["urlDef"] = url_def(a)
@@ -153,10 +154,11 @@ async def pick_logo(body: IdxIn, u=Depends(affiliate_user)):
     a = await db.affiliates.find_one({"id": u["id"]}, {"_id": 0})
     if a["stato"] != "accettata" or not (0 <= body.idx < 3) or not a["loghi"][body.idx]:
         raise HTTPException(400, "Logo non disponibile")
-    if a["pagamento"] == "confermato":
+    if a.get("sceltaFinale") or a["pagamento"] == "confermato":
         raise HTTPException(400, "Il logo non si può più cambiare")
     await db.affiliates.update_one({"id": u["id"]}, {"$set": {"logoScelto": body.idx}})
     await notify_admins(f"<b>{aff_name(a)}</b> ha scelto il logo {body.idx + 1}", "affiliato", u["id"])
+    await finalize(u["id"])
     return {"ok": True}
 
 
@@ -169,7 +171,20 @@ async def url_final(body: IdxIn, u=Depends(affiliate_user)):
         raise HTTPException(400, "Puoi scegliere solo un URL disponibile")
     await db.affiliates.update_one({"id": u["id"]}, {"$set": {"urlDefinitivo": body.idx}})
     await notify_admins(f"<b>{aff_name(a)}</b> ha scelto l'URL definitivo <b>{a['urls'][body.idx]['value']}</b>", "affiliato", u["id"])
+    await finalize(u["id"])
     return {"ok": True}
+
+
+async def finalize(aid):
+    a = await db.affiliates.find_one({"id": aid}, {"_id": 0})
+    li, ui = a.get("logoScelto"), a.get("urlDefinitivo")
+    if li is None or ui is None or a.get("sceltaFinale"):
+        return
+    drop = [f for i, f in enumerate(a["loghi"]) if i != li and f]
+    await db.files.update_many({"id": {"$in": drop}}, {"$set": {"is_deleted": True}})
+    loghi = [f if i == li else None for i, f in enumerate(a["loghi"])]
+    urls = [x if i == ui else {"value": "", "stato": "da_verificare"} for i, x in enumerate(a["urls"])]
+    await db.affiliates.update_one({"id": aid}, {"$set": {"loghi": loghi, "urls": urls, "sceltaFinale": True}})
 
 
 @router.post("/url-alt")

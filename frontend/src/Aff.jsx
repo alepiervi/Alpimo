@@ -173,20 +173,27 @@ function LogoUrl({ a, reload }) {
   const act = useAction();
   const { ask } = useUI();
   const [alt, setAlt] = useState({});
-  const logoOk = a.loghi.every(Boolean);
+  const logoOk = a.sceltaFinale || a.loghi.every(Boolean);
+  const finalTxt = "\n\nCon logo e URL scelti, le altre proposte verranno eliminate e la scelta sarà definitiva.";
   const choose = async (i) => {
-    if (!(await ask({ title: "Confermi l'URL definitivo?", text: `${a.urls[i].value}\n\nDopo la conferma non potrai più cambiarlo.` }))) return;
+    if (!(await ask({ title: "Confermi l'URL definitivo?", text: `${a.urls[i].value}\n\nDopo la conferma non potrai più cambiarlo.${a.logoScelto != null ? finalTxt : ""}` }))) return;
     act(() => post("/aff/url-final", { idx: i }), "URL definitivo confermato").then((r) => r && reload());
+  };
+  const pickLogo = async (i) => {
+    if (a.sceltaFinale || a.logoScelto === i) return;
+    if (a.urlDefinitivo != null && !(await ask({ title: `Confermi il logo ${i + 1}?`, text: finalTxt.trim() }))) return;
+    act(() => post("/aff/logo", { idx: i }), "Logo selezionato").then((r) => r && reload());
   };
   const logo = a.logoScelto != null && a.loghiInfo[a.logoScelto];
   return (
     <div className="card" data-testid="card-logo-url">
+      {!a.sceltaFinale && <div className="note info small" data-testid="final-choice-note">Quando avrai scelto sia il logo sia l'URL definitivo, le proposte non scelte verranno eliminate.</div>}
       <div className="card-h"><h3><span className="num">2</span>URL e logo</h3></div>
       <h4>Scegli il logo</h4>
       {logoOk ? (
         <div className="logos">
-          {a.loghiInfo.map((f, i) => (
-            <button key={i} className={`logo-tile ${a.logoScelto === i ? "sel" : ""}`} onClick={() => a.pagamento !== "confermato" && act(() => post("/aff/logo", { idx: i }), "Logo selezionato").then((r) => r && reload())} data-testid={`logo-choice-${i}`}>
+          {a.loghiInfo.map((f, i) => f && (
+            <button key={i} className={`logo-tile ${a.logoScelto === i ? "sel" : ""}`} onClick={() => pickLogo(i)} data-testid={`logo-choice-${i}`}>
               {a.logoScelto === i && <span className="tag"><Badge k="accent">Scelto</Badge></span>}
               <div className="img"><img src={fileUrl(f.id)} alt={`Logo ${i + 1}`} /></div><b>Proposta {i + 1}</b>
             </button>
