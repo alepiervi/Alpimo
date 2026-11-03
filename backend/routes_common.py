@@ -1,0 +1,188 @@
+import os
+import uuid
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Response
+from pydantic import BaseModel
+from core import (db, nowiso, uid, current_user, can, put_object, get_object, notify, notify_admins, send_mail, admin_email,
+                  aff_name, next_seq)
+
+router = APIRouter(prefix="/api")
+EXT_AFF = {"pdf", "jpg", "jpeg", "png", "webp", "gif", "heic"}
+EXT_ADMIN = EXT_AFF | {"svg", "zip", "docx", "pptx", "xlsx", "csv", "mp4", "txt", "doc", "xls", "ppt", "mov", "webm"}
+
+
+@router.post("/files")
+async def upload(file: UploadFile = File(...), owner: str = Form(""), u=Depends(current_user)):
+    ext = (file.filename.rsplit(".", 1)[-1] if "." in file.filename else "").lower()
+    data = await file.read()
+    if u["role"] == "affiliate":
+        if ext not in EXT_AFF:
+            raise HTTPException(400, "Formato non ammesso: carica un PDF o un'immagine")
+        if len(data) > 10 * 1024 * 1024:
+            raise HTTPException(400, "File troppo grande (max 10 MB)")
+        owner = u["id"]
+    else:
+        if ext not in EXT_ADMIN:
+            raise HTTPException(400, "Formato non ammesso")
+        limit = 500 if ext in ("mp4", "mov", "webm") else 50
+        if len(data) > limit * 1024 * 1024:
+            raise HTTPException(400, f"File troppo grande (max {limit} MB)")
+        owner = owner or "public"
+    path = f"{os.environ.get('APP_NAME', 'alpimo')}/uploads/{owner}/{uuid.uuid4()}.{ext or 'bin'}"
+    ctype = file.content_type or "application/octet-stream"
+    try:
+        res = put_object(path, data, ctype)
+    except Exception as e:
+        raise HTTPException(502, f"Archiviazione non disponibile: {str(e)[:80]}")
+    doc = {"id": uid(), "path": res["path"], "name": file.filename, "type": ctype, "size": len(data), "owner": owner,
+           "uploader": u["id"], "is_deleted": False, "created_at": nowiso()}
+    await db.files.insert_one(doc)
+    return {"id": doc["id"], "name": doc["name"], "type": ctype, "size": doc["size"]}
+
+
+@router.get("/files/{fid}")
+async def download(fid: str, dl: int = 0, u=Depends(current_user)):
+    f = await db.files.find_one({"id": fid, "is_deleted": False})
+    if not f:
+        raise HTTPException(404, "File non trovato")
+    if u["role"] != "admin" and f["owner"] not in (u["id"], "public"):
+        raise HTTPException(403, "Accesso negato")
+    data, ct = get_object(f["path"])
+    disp = "attachment" if dl else "inline"
+    safe = f["name"].encode("ascii", "ignore").decode().replace('"', "") or "file"
+    return Response(content=data, media_type=f.get("type") or ct, headers={"Content-Disposition": f'{disp}; filename="{safe}"', "Cache-Control": "private, max-age=3600"})
+
+
+# ---------- notifications ----------
+def nkey(u):
+    return "admin" if u["role"] == "admin" else u["id"]
+
+
+@router.get("/notifications")
+async def notifs(u=Depends(current_user)):
+    return await db.notifications.find({"to": nkey(u)}, {"_id": 0}).sort("at", -1).to_list(40)
+
+
+@router.post("/notifications/read-all")
+async def notifs_all(u=Depends(current_user)):
+    await db.notifications.update_many({"to": nkey(u)}, {"$set": {"letto": True}})
+    return {"ok": True}
+
+
+@router.post("/notifications/{nid}/read")
+async def notif_read(nid: str, u=Depends(current_user)):
+    await db.notifications.update_one({"id": nid, "to": nkey(u)}, {"$set": {"letto": True}})
+    return {"ok": True}
+
+
+# ---------- tickets ----------
+class TicketIn(BaseModel):
+    oggetto: str
+    priorita: str = "media"
+    testo: str
+
+
+class MsgIn(BaseModel):
+    testo: str
+
+
+class StatoIn(BaseModel):
+    stato: str
+
+
+LBL = {"aperto": "Aperto", "in_lavorazione": "In lavorazione", "chiuso": "Chiuso"}
+
+
+async def tk_access(tid, u):
+    t = await db.tickets.find_one({"id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Ticket non trovato")
+    if u["role"] == "affiliate" and t["affId"] != u["id"]:
+        raise HTTPException(403, "Accesso negato")
+    if u["role"] == "admin" and not can(u, "ticket") and not can(u, "affiliati"):
+        raise HTTPException(403, "Permesso negato")
+    return t
+
+
+@router.get("/tickets")
+async def tickets(affId: str = "", u=Depends(current_user)):
+    q = {"affId": u["id"]} if u["role"] == "affiliate" else ({"affId": affId} if affId else {})
+    if u["role"] == "admin" and not (can(u, "ticket") or can(u, "affiliati")):
+        raise HTTPException(403, "Permesso negato")
+    L = await db.tickets.find(q, {"_id": 0}).sort("createdAt", -1).to_list(500)
+    if u["role"] == "admin":
+        names = {a["id"]: aff_name(a) for a in await db.affiliates.find({"id": {"$in": list({t["affId"] for t in L})}}, {"_id": 0}).to_list(1000)}
+        for t in L:
+            t["agenzia"] = names.get(t["affId"], "")
+    return L
+
+
+@router.post("/tickets")
+async def new_ticket(body: TicketIn, u=Depends(current_user)):
+    if u["role"] != "affiliate":
+        raise HTTPException(403, "Solo gli affiliati aprono ticket")
+    if not body.oggetto.strip() or not body.testo.strip():
+        raise HTTPException(400, "Compila oggetto e descrizione")
+    a = await db.affiliates.find_one({"id": u["id"]}, {"_id": 0})
+    n = "T-" + str(await next_seq("ticket")).zfill(4)
+    t = {"id": uid(), "num": n, "affId": u["id"], "oggetto": body.oggetto.strip(), "priorita": body.priorita, "stato": "aperto",
+         "messaggi": [{"da": "affiliato", "testo": body.testo.strip(), "at": nowiso()}], "lettoAdmin": False, "lettoAff": True, "createdAt": nowiso()}
+    await db.tickets.insert_one(dict(t))
+    ag = aff_name(a)
+    await send_mail(await admin_email(), f"[Ticket #{n}] Nuovo ticket da {ag} – priorità {t['priorita']}", f"Nuovo ticket #{n} aperto da {ag} ({u['email']}).\n\nOggetto: {t['oggetto']}\nPriorità: {t['priorita']}\n\nMessaggio:\n{body.testo}", t["id"])
+    await send_mail(u["email"], f"[Ticket #{n}] Abbiamo ricevuto la tua richiesta", f"Ciao {ag},\n\nabbiamo ricevuto il tuo ticket #{n}: \"{t['oggetto']}\".\nTi risponderemo il prima possibile.", t["id"])
+    await notify_admins(f"Nuovo ticket <b>#{n}</b> da <b>{ag}</b>: {t['oggetto']}", "ticket", t["id"])
+    await notify(u["id"], f"Ticket <b>#{n}</b> aperto. Ti abbiamo inviato un'email di conferma.", "ticket", t["id"])
+    t.pop("_id", None)
+    return t
+
+
+@router.get("/tickets/{tid}")
+async def get_ticket(tid: str, u=Depends(current_user)):
+    t = await tk_access(tid, u)
+    field = "lettoAdmin" if u["role"] == "admin" else "lettoAff"
+    await db.tickets.update_one({"id": tid}, {"$set": {field: True}})
+    await db.notifications.update_many({"to": nkey(u), "ref": tid}, {"$set": {"letto": True}})
+    t["emails"] = await db.email_log.find({"ref": tid}, {"_id": 0}).sort("at", -1).to_list(50) if u["role"] == "admin" else []
+    return t
+
+
+@router.post("/tickets/{tid}/msg")
+async def ticket_msg(tid: str, body: MsgIn, u=Depends(current_user)):
+    t = await tk_access(tid, u)
+    if not body.testo.strip():
+        raise HTTPException(400, "Scrivi un messaggio")
+    a = await db.affiliates.find_one({"id": t["affId"]}, {"_id": 0})
+    ag, n = aff_name(a), t["num"]
+    msg = {"da": "admin" if u["role"] == "admin" else "affiliato", "testo": body.testo.strip(), "at": nowiso()}
+    if u["role"] == "admin":
+        st = "in_lavorazione" if t["stato"] == "aperto" else t["stato"]
+        await db.tickets.update_one({"id": tid}, {"$push": {"messaggi": msg}, "$set": {"lettoAff": False, "lettoAdmin": True, "stato": st}})
+        await send_mail(a["email"], f"[Ticket #{n}] Nuova risposta dal supporto", f"Ciao {ag},\n\nil supporto ha risposto al ticket #{n} \"{t['oggetto']}\":\n\n{msg['testo']}\n\nStato attuale: {LBL[st]}", tid)
+        await notify(t["affId"], f"Nuova risposta al ticket <b>#{n}</b>", "ticket", tid)
+    else:
+        reopen = t["stato"] == "chiuso"
+        await db.tickets.update_one({"id": tid}, {"$push": {"messaggi": msg}, "$set": {"lettoAdmin": False, "lettoAff": True, "stato": "aperto" if reopen else t["stato"]}})
+        extra = " – riaperto" if reopen else ""
+        await send_mail(await admin_email(), f"[Ticket #{n}] Nuova risposta da {ag}{extra}", f"{ag} ha risposto al ticket #{n} \"{t['oggetto']}\":\n\n{msg['testo']}", tid)
+        await notify_admins(f"<b>{ag}</b> ha risposto al ticket <b>#{n}</b>{extra}", "ticket", tid)
+    return {"ok": True}
+
+
+@router.post("/tickets/{tid}/status")
+async def ticket_status(tid: str, body: StatoIn, u=Depends(current_user)):
+    t = await tk_access(tid, u)
+    if body.stato not in LBL:
+        raise HTTPException(400, "Stato non valido")
+    a = await db.affiliates.find_one({"id": t["affId"]}, {"_id": 0})
+    ag, n = aff_name(a), t["num"]
+    if u["role"] == "affiliate":
+        if body.stato != "chiuso":
+            raise HTTPException(400, "Puoi solo segnare il ticket come risolto")
+        await db.tickets.update_one({"id": tid}, {"$set": {"stato": "chiuso", "lettoAdmin": False}})
+        await send_mail(await admin_email(), f"[Ticket #{n}] Segnato come risolto da {ag}", f"{ag} ha segnato come risolto il ticket #{n} \"{t['oggetto']}\".", tid)
+        await notify_admins(f"<b>{ag}</b> ha segnato come risolto il ticket <b>#{n}</b>", "ticket", tid)
+    else:
+        await db.tickets.update_one({"id": tid}, {"$set": {"stato": body.stato, "lettoAff": False}})
+        await send_mail(a["email"], f"[Ticket #{n}] Stato aggiornato: {LBL[body.stato]}", f"Ciao {ag},\n\nil ticket #{n} \"{t['oggetto']}\" è ora nello stato: {LBL[body.stato]}.", tid)
+        await notify(t["affId"], f"Ticket <b>#{n}</b>: stato aggiornato a {LBL[body.stato]}", "ticket", tid)
+    return {"ok": True}
