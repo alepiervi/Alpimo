@@ -36,3 +36,4 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 - Verifica email affiliati sospesa finché Aruba/Brevo non sono configurati (registrazione = verificato); riparte automaticamente per le nuove registrazioni appena una credenziale email è presente
 - Logo + URL definitivo scelti => proposte non scelte eliminate (sceltaFinale), scelta bloccata
 - Dati interni admin: azienda affiliante e piattaforma acquisto dominio (in lista, scadenze, export CSV; nascosti all affiliato)
+- Eliminazione affiliato (admin, permesso affiliati) con conferma scrivendo ELIMINA: cancella account, dati, documenti, pagamenti, ticket, corsi, notifiche, file

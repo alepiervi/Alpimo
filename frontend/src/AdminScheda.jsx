@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Badge, useLoad, useAction, useUI, UploadBox, FileChip, Field, Empty, Ico, DateInput } from "./ui.jsx";
-import { post, put, fileUrl, fd, fdt, FASI, DOCT, statoInfo, genPw, STEPS } from "./lib.js";
+import { post, put, del, fileUrl, fd, fdt, FASI, DOCT, statoInfo, genPw, STEPS } from "./lib.js";
 import { DatiKV } from "./Aff.jsx";
 import { BillingForm, PayTable } from "./AffTabs.jsx";
 import { RemChips, canP } from "./Admin.jsx";
@@ -11,15 +11,25 @@ const DST = { in_verifica: ["In verifica", "warn"], approvato: ["Approvato", "ok
 export default function Scheda({ id, user, back }) {
   const [a, reload] = useLoad(`/admin/affiliates/${id}`);
   const act = useAction();
+  const { ask } = useUI();
   if (!a) return null;
   const [lbl, k] = statoInfo(a);
   const A = (path, body, msg) => act(() => post(`/admin/affiliates/${id}/${path}`, body), msg).then((r) => r && reload());
   const P = { a, A, reload, act, id, user };
+  const remove = async () => {
+    const name = a.nomeAgenzia || a.email;
+    const v = await ask({ title: `Eliminare ${name}?`, danger: true, ok: "Elimina definitivamente", input: "text", placeholder: "Scrivi ELIMINA per confermare",
+      text: "Verranno cancellati account, dati, documenti, pagamenti, fatture, ticket e avanzamento corsi. L'operazione non si può annullare." });
+    if (v === null) return;
+    if (v.trim().toUpperCase() !== "ELIMINA") return act(() => Promise.reject(new Error("Conferma non valida: scrivi ELIMINA")));
+    if (await act(() => del(`/admin/affiliates/${id}`), "Affiliato eliminato")) back();
+  };
   return (
     <div data-testid="affiliate-detail">
       <button className="back" onClick={back} data-testid="detail-back">← Affiliati</button>
       <div className="sch-h">
         <div><h2>{a.nomeAgenzia || a.email}</h2><div className="row" style={{ marginTop: 6 }}><Badge k={k} data-testid="detail-status">{lbl}</Badge><span className="small muted">{a.email} · tappa: {STEPS[a.step]}</span>{!a.user?.verified && <><Badge k="warn">Email non verificata</Badge><button className="btn sm" onClick={() => A("verify-email", {}, "Email segnata come verificata")} data-testid="detail-verify-email">Segna come verificata</button></>}</div></div>
+        <button className="btn danger" onClick={remove} data-testid="affiliate-delete-btn">Elimina affiliato</button>
       </div>
       <div className="sch-grid">
         <div className="card"><h3 style={{ marginBottom: 10 }}>Dati anagrafici</h3><DatiKV a={a} />{a.stato === "rifiutata" && <div className="note bad" style={{ marginTop: 10 }}>Rifiutata: {a.nota}</div>}</div>

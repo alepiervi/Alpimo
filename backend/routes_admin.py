@@ -125,6 +125,19 @@ async def affiliate(aid: str, u=Depends(need("affiliati"))):
     return a
 
 
+@router.delete("/affiliates/{aid}")
+async def delete_aff(aid: str, u=Depends(need("affiliati"))):
+    a = await get_aff(aid)
+    for c in ("documents", "payments", "tickets", "progress"):
+        await db[c].delete_many({"affId": aid})
+    await db.notifications.delete_many({"$or": [{"to": aid}, {"ref": aid}]})
+    await db.codes.delete_many({"user_id": aid})
+    await db.files.update_many({"owner": aid}, {"$set": {"is_deleted": True}})
+    await db.affiliates.delete_one({"id": aid})
+    await db.users.delete_one({"id": aid, "role": "affiliate"})
+    return {"ok": True, "email": a["email"]}
+
+
 class DecideIn(BaseModel):
     accept: bool
     nota: str = ""
