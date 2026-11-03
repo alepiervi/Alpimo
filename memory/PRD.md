@@ -45,3 +45,4 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 
 ## 2026-06 — Guida contestuale
 - Pulsante "Guida" in ogni sezione admin (campo `sezioni` sulle guide), apre la guida in finestra con schede se ce ne sono piu di una. Assegnazione sezioni modificabile nell editor guide.
+- Tipologia sito (Base/Plus/Completo) nei Dati interni della scheda admin, colonna+filtro lista Affiliati, export CSV, report "Siti per tipologia". Nascosta agli affiliati, non incide sul prezzo.

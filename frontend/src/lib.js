@@ -51,6 +51,7 @@ export async function upload(file, owner) {
 }
 
 export const STEPS = ["Dati", "Approvazione", "URL e logo", "Pagamento", "Realizzazione", "Consegna"];
+export const TIPI = ["Base", "Plus", "Completo"];
 export const FASI = ["Pagamento ricevuto", "Sviluppo in corso", "Revisione e test", "Consegnato"];
 export const REM = [30, 15, 7, 1];
 export const REM_LBL = { 30: "1 mese prima", 15: "15 giorni prima", 7: "7 giorni prima", 1: "Giorno prima" };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Badge, useLoad, useAction, useUI, UploadBox, FileChip, Field, Empty, Ico, DateInput } from "./ui.jsx";
-import { post, put, del, fileUrl, fd, fdt, FASI, DOCT, statoInfo, genPw, STEPS } from "./lib.js";
+import { post, put, del, fileUrl, fd, fdt, FASI, DOCT, statoInfo, genPw, STEPS, TIPI } from "./lib.js";
 import { DatiKV } from "./Aff.jsx";
 import { BillingForm, PayTable } from "./AffTabs.jsx";
 import { RemChips, canP } from "./Admin.jsx";
@@ -28,7 +28,7 @@ export default function Scheda({ id, user, back }) {
     <div data-testid="affiliate-detail">
       <button className="back" onClick={back} data-testid="detail-back">← Affiliati</button>
       <div className="sch-h">
-        <div><h2>{a.nomeAgenzia || a.email}</h2><div className="row" style={{ marginTop: 6 }}><Badge k={k} data-testid="detail-status">{lbl}</Badge><span className="small muted">{a.email} · tappa: {STEPS[a.step]}</span>{!a.user?.verified && <><Badge k="warn">Email non verificata</Badge><button className="btn sm" onClick={() => A("verify-email", {}, "Email segnata come verificata")} data-testid="detail-verify-email">Segna come verificata</button></>}</div></div>
+        <div><h2>{a.nomeAgenzia || a.email}</h2><div className="row" style={{ marginTop: 6 }}><Badge k={k} data-testid="detail-status">{lbl}</Badge>{a.tipologia && <Badge k="info" data-testid="detail-tipologia">Sito {a.tipologia}</Badge>}<span className="small muted">{a.email} · tappa: {STEPS[a.step]}</span>{!a.user?.verified && <><Badge k="warn">Email non verificata</Badge><button className="btn sm" onClick={() => A("verify-email", {}, "Email segnata come verificata")} data-testid="detail-verify-email">Segna come verificata</button></>}</div></div>
         <button className="btn danger" onClick={remove} data-testid="affiliate-delete-btn">Elimina affiliato</button>
       </div>
       <div className="sch-grid">
@@ -54,10 +54,10 @@ export default function Scheda({ id, user, back }) {
 }
 
 function InternalCard({ a, A }) {
-  const [f, setF] = useState({ aziendaId: a.aziendaId || "", registrar: a.registrar || "" });
+  const [f, setF] = useState({ aziendaId: a.aziendaId || "", registrar: a.registrar || "", tipologia: a.tipologia || "" });
   const [opt] = useLoad("/admin/internal-options");
   const [C] = useLoad("/admin/companies");
-  useEffect(() => setF({ aziendaId: a.aziendaId || "", registrar: a.registrar || "" }), [a.aziendaId, a.registrar]);
+  useEffect(() => setF({ aziendaId: a.aziendaId || "", registrar: a.registrar || "", tipologia: a.tipologia || "" }), [a.aziendaId, a.registrar, a.tipologia]);
   const sugg = (id, L) => <datalist id={id}>{(L || []).map((x) => <option key={x} value={x} />)}</datalist>;
   return (
     <div className="card" data-testid="detail-internal-card"><h3 style={{ marginBottom: 4 }}>Dati interni</h3><p className="small muted" style={{ marginBottom: 10 }}>Visibili solo agli amministratori. L'azienda decide anche i dati di pagamento mostrati all'affiliato.</p>
@@ -65,6 +65,8 @@ function InternalCard({ a, A }) {
         <Field label="Azienda con cui è stato affiliato"><select value={f.aziendaId} onChange={(e) => setF({ ...f, aziendaId: e.target.value })} data-testid="internal-azienda">
           <option value="">— Nessuna (pagamento predefinito) —</option>{(C || []).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></Field>
         <Field label="Piattaforma su cui è stato acquistato il dominio"><input type="text" list="dl-registrar" value={f.registrar} onChange={(e) => setF({ ...f, registrar: e.target.value })} placeholder="es. Aruba, Register.it, GoDaddy" data-testid="internal-registrar" />{sugg("dl-registrar", [...new Set([...(opt?.registrar || []), "Aruba", "Register.it", "GoDaddy", "OVH", "Namecheap", "SiteGround"])])}</Field>
+        <Field label="Tipologia sito"><div className="row" style={{ gap: 6 }} data-testid="internal-tipologia">{TIPI.map((t) => (
+          <button type="button" key={t} className={`btn sm ${f.tipologia === t ? "primary" : "ghost"}`} onClick={() => setF({ ...f, tipologia: f.tipologia === t ? "" : t })} data-testid={`internal-tipologia-${t.toLowerCase()}`}>{t}</button>))}</div></Field>
         <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={() => A("internal", f, "Dati interni salvati")} data-testid="internal-save">Salva</button></div>
       </div>
     </div>

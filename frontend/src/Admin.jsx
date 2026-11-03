@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Ico, Scene, Badge, Bell, useLoad, useAction, useUI, Empty } from "./ui.jsx";
-import { post, API, fd, fdt, eur, daysTo, statoInfo, REM, REM_LBL, STEPS, downloadUrl } from "./lib.js";
+import { post, API, fd, fdt, eur, daysTo, statoInfo, REM, REM_LBL, STEPS, downloadUrl, TIPI } from "./lib.js";
 import Scheda from "./AdminScheda.jsx";
 import Tickets from "./Tickets.jsx";
 import { AdminCourses } from "./Courses.jsx";
@@ -120,16 +120,18 @@ function Affiliati({ nav }) {
   const [C] = useLoad("/admin/companies");
   const [q, setQ] = useState("");
   const [co, setCo] = useState("");
+  const [tp, setTp] = useState("");
   if (!L) return null;
-  const V = L.filter((r) => (!co || (co === "-" ? !r.aziendaId : r.aziendaId === co)) && (!q || `${r.nome} ${r.email} ${r.url} ${r.citta} ${r.azienda} ${r.registrar}`.toLowerCase().includes(q.toLowerCase())));
+  const V = L.filter((r) => (!tp || (tp === "-" ? !r.tipologia : r.tipologia === tp)) && (!co || (co === "-" ? !r.aziendaId : r.aziendaId === co)) && (!q || `${r.nome} ${r.email} ${r.url} ${r.citta} ${r.azienda} ${r.registrar}`.toLowerCase().includes(q.toLowerCase())));
   return (
     <div data-testid="admin-affiliates">
       <div className="row between" style={{ marginBottom: 16 }}><h2><Ico n="users" s={22} />Affiliati</h2>
         <div className="row">{C && C.length > 0 && <select value={co} onChange={(e) => setCo(e.target.value)} style={{ width: 200 }} data-testid="affiliates-company-filter"><option value="">Tutte le aziende</option>{C.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}<option value="-">Senza azienda</option></select>}
+          <select value={tp} onChange={(e) => setTp(e.target.value)} style={{ width: 170 }} data-testid="affiliates-tipologia-filter"><option value="">Tutte le tipologie</option>{TIPI.map((t) => <option key={t}>{t}</option>)}<option value="-">Non indicata</option></select>
           <input type="text" placeholder="Cerca…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 240 }} data-testid="affiliates-search" /><button className="btn" onClick={() => downloadUrl(`${API}/admin/export/affiliati`)} data-testid="export-affiliati">Export CSV</button></div></div>
-      <div className="card tablewrap"><table className="resp"><thead><tr><th>Agenzia</th><th>Azienda affiliante</th><th>Stato</th><th>Tappa</th><th>URL</th><th>Scadenza dominio</th></tr></thead>
+      <div className="card tablewrap"><table className="resp"><thead><tr><th>Agenzia</th><th>Azienda affiliante</th><th>Tipologia</th><th>Stato</th><th>Tappa</th><th>URL</th><th>Scadenza dominio</th></tr></thead>
         <tbody>{V.map((r) => { const [l, k] = statoInfo(r); return (
-          <tr key={r.id} className="click" onClick={() => nav("affiliati", r.id)} data-testid="affiliate-row"><td data-l="Agenzia"><b>{r.nome}</b><div className="small muted">{r.email}</div></td><td data-l="Azienda affiliante">{r.azienda || "—"}</td><td data-l="Stato"><Badge k={k}>{l}</Badge></td><td data-l="Tappa">{STEPS[r.step]}</td><td data-l="URL"><span className="mono">{r.url || "—"}</span>{r.registrar && <div className="small muted">su {r.registrar}</div>}</td><td data-l="Scadenza">{fd(r.scadenza)}</td></tr>); })}</tbody></table>{!V.length && <Empty>Nessun affiliato corrisponde ai filtri.</Empty>}</div>
+          <tr key={r.id} className="click" onClick={() => nav("affiliati", r.id)} data-testid="affiliate-row"><td data-l="Agenzia"><b>{r.nome}</b><div className="small muted">{r.email}</div></td><td data-l="Azienda affiliante">{r.azienda || "—"}</td><td data-l="Tipologia">{r.tipologia ? <Badge k="info">{r.tipologia}</Badge> : "—"}</td><td data-l="Stato"><Badge k={k}>{l}</Badge></td><td data-l="Tappa">{STEPS[r.step]}</td><td data-l="URL"><span className="mono">{r.url || "—"}</span>{r.registrar && <div className="small muted">su {r.registrar}</div>}</td><td data-l="Scadenza">{fd(r.scadenza)}</td></tr>); })}</tbody></table>{!V.length && <Empty>Nessun affiliato corrisponde ai filtri.</Empty>}</div>
     </div>
   );
 }
@@ -173,6 +175,7 @@ function Report() {
       <div className="card"><h3>Incassi mensili</h3><div className="bars">{d.months.map((v, i) => <div className="bar" key={i}><span className="bv">{v ? eur(v) : ""}</span><i style={{ height: (v / max) * 100 + "%" }} /><small>{M[i]}</small></div>)}</div></div>
       <div className="sch-grid" style={{ marginTop: 16 }}>
         <div className="card"><h3>Panoramica rete</h3><dl className="kv" style={{ marginTop: 10 }}><dt>Affiliati</dt><dd>{d.rete.affiliati}</dd><dt>In attesa</dt><dd>{d.rete.inAttesa}</dd><dt>In realizzazione</dt><dd>{d.rete.realizzazione}</dd><dt>Consegnati</dt><dd>{d.rete.consegnati}</dd><dt>Online</dt><dd>{d.rete.online}</dd></dl></div>
+        <div className="card" data-testid="report-tipologie"><h3>Siti per tipologia</h3><dl className="kv" style={{ marginTop: 10 }}>{TIPI.map((t) => <React.Fragment key={t}><dt>{t}</dt><dd data-testid={`report-tipologia-${t.toLowerCase()}`}>{d.rete.tipologie[t]}</dd></React.Fragment>)}<dt>Non indicata</dt><dd>{d.rete.tipologie[""]}</dd></dl></div>
         <div className="card"><h3>Export CSV</h3><p className="small muted">Separatore ";" compatibile con Excel.</p><div className="row" style={{ marginTop: 10 }}>
           {["affiliati", "pagamenti", "scadenze", "corsi"].map((k) => <button key={k} className="btn sm" onClick={() => downloadUrl(`${API}/admin/export/${k}`)} data-testid={`export-${k}-btn`}>{k[0].toUpperCase() + k.slice(1)}</button>)}</div></div>
       </div>

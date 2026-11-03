@@ -6,7 +6,7 @@ from datetime import date
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 from core import (db, nowiso, today, uid, admin_user, need, super_user, can, get_settings, notify, notify_admins, send_mail, aff_name,
                   url_def, enc, dec, file_info, itd, scope_all, aff_q, scope_ids, pag_for, add_biz, add_year, days_to, hash_pw, next_seq, PERMS, email_status)
 from routes_aff import billing_errors
@@ -44,7 +44,7 @@ def row(a, users, comps):
             "inviati": a["dominio"].get("inviati", []), "verified": u.get("verified"), "createdAt": a.get("createdAt"),
             "submittedAt": a.get("submittedAt"), "nota": a.get("nota"), "consegna": a.get("consegna"), "loghi": a.get("loghi"),
             "logoScelto": a.get("logoScelto"), "urlDefinitivo": a.get("urlDefinitivo"), "sceltaFinale": a.get("sceltaFinale", False),
-            "aziendaId": a.get("aziendaId"), "azienda": comps.get(a.get("aziendaId"), ""), "registrar": a.get("registrar", "")}
+            "aziendaId": a.get("aziendaId"), "azienda": comps.get(a.get("aziendaId"), ""), "registrar": a.get("registrar", ""), "tipologia": a.get("tipologia", "")}
 
 
 async def comp_names():
@@ -309,6 +309,7 @@ async def online(aid: str, u=Depends(need("affiliati"))):
 class InternalIn(BaseModel):
     aziendaId: Optional[str] = None
     registrar: str = ""
+    tipologia: Literal["", "Base", "Plus", "Completo"] = ""
 
 
 @router.post("/affiliates/{aid}/internal")
@@ -318,7 +319,7 @@ async def internal(aid: str, body: InternalIn, u=Depends(need("affiliati"))):
         raise HTTPException(400, "Azienda non valida")
     if body.aziendaId and not scope_all(u) and body.aziendaId not in (u.get("aziende") or []):
         raise HTTPException(403, "Non puoi assegnare questa azienda")
-    await db.affiliates.update_one({"id": aid}, {"$set": {"aziendaId": body.aziendaId or None, "registrar": body.registrar.strip()}})
+    await db.affiliates.update_one({"id": aid}, {"$set": {"aziendaId": body.aziendaId or None, "registrar": body.registrar.strip(), "tipologia": body.tipologia}})
     return {"ok": True}
 
 
@@ -688,7 +689,8 @@ async def report(year: int = 0, u=Depends(need("report"))):
             months[int((p.get("pagatoAt") or p["at"])[5:7]) - 1] += p["totale"]
     R = await all_rows(u)
     rete = {"affiliati": len(R), "inAttesa": len([r for r in R if r["stato"] == "in_attesa"]), "consegnati": len([r for r in R if r["consegnato"]]),
-            "online": len([r for r in R if r["online"]]), "realizzazione": len([r for r in R if r["pagamento"] == "confermato" and not r["consegnato"]])}
+            "online": len([r for r in R if r["online"]]), "realizzazione": len([r for r in R if r["pagamento"] == "confermato" and not r["consegnato"]]),
+            "tipologie": {t: len([r for r in R if r["tipologia"] == t]) for t in ("Base", "Plus", "Completo", "")}}
     return {"year": yr, "years": years, "byKind": byk, "totale": sum(byk.values()), "inVerifica": verif, "months": months, "rete": rete}
 
 
@@ -709,11 +711,11 @@ async def export(kind: str, u=Depends(admin_user)):
     inids = {"affId": {"$in": list(names)}}
     comps = await comp_names()
     if kind == "affiliati":
-        H = ["Agenzia", "Email", "Tipo", "Città", "Telefono", "Stato", "Pagamento", "URL", "Scadenza dominio", "Azienda affiliante", "Piattaforma dominio", "Intestatario", "CF", "P.IVA", "SDI", "PEC", "Indirizzo", "CAP", "Città fatt.", "Prov."]
+        H = ["Agenzia", "Email", "Tipo", "Città", "Telefono", "Stato", "Pagamento", "URL", "Scadenza dominio", "Azienda affiliante", "Piattaforma dominio", "Tipologia sito", "Intestatario", "CF", "P.IVA", "SDI", "PEC", "Indirizzo", "CAP", "Città fatt.", "Prov."]
         rows = []
         for a in affs:
             f = a.get("fatturazione") or {}
-            rows.append([aff_name(a), a["email"], a["tipo"], a.get("citta"), a.get("telefono"), a["stato"], a["pagamento"], url_def(a), a["dominio"].get("scadenza"), comps.get(a.get("aziendaId"), ""), a.get("registrar", "")] +
+            rows.append([aff_name(a), a["email"], a["tipo"], a.get("citta"), a.get("telefono"), a["stato"], a["pagamento"], url_def(a), a["dominio"].get("scadenza"), comps.get(a.get("aziendaId"), ""), a.get("registrar", ""), a.get("tipologia", "")] +
                         [f.get(k, "") for k in ("intestatario", "cf", "piva", "sdi", "pec", "indirizzo", "cap", "citta", "provincia")])
         return csv_resp("affiliati", H, rows)
     if kind == "pagamenti":

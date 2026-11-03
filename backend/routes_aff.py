@@ -50,7 +50,7 @@ async def view_aff(a, s=None):
     s = s or await get_settings()
     out = dict(a)
     out["cred"] = dec(a.get("cred")) if a.get("consegnato") else {}
-    for k in ("superAdmin", "aziendaAffiliante", "aziendaId", "registrar"):
+    for k in ("superAdmin", "aziendaAffiliante", "aziendaId", "registrar", "tipologia"):
         out.pop(k, None)
     out["loghiInfo"] = [await file_info(x) for x in a.get("loghi") or [None] * 3]
     out["ricevutaInfo"] = await file_info(a.get("ricevuta"))
