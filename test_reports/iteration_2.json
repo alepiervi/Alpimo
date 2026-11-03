@@ -1,0 +1,18 @@
+{
+  "summary": "Iteration 2 retest of the iteration_1 fixes plus a short smoke test. Backend: new pytest file tests/test_iter2_fixes.py, 16/16 passing. It covers: lockout keyed by email (5x401 then 429, and uppercase email shares the counter); invalid domain date -> 400; renew description 'fino al 01/03/2027'; giorni 0/-5 -> 422; manual totale 0/-10 -> 422; emails q '(', '[', '*', '+?' -> 200; done on an unknown course -> 404; premium 'unlocked' is boolean false (checked on mario; blu bought the premium course in iteration 1); download of a deleted material does not increment; collaborator with only 'ticket' perm gets only ticket and general notifications (read-all does not touch others), while super admin still sees all. Frontend (Playwright, 1920x1080): admin login + dashboard with 5 KPIs; scheda of test_85e75669 shows logo-remove-0..2 labelled 'Rimuovi'; domain-date-save exists; 'Rinnovo pagato (+1 anno)' updates the date input 2027-03-01 -> 2028-03-01 without reload; Salva with a custom date persists; .amain is 1400px wide. Affiliate blu: Documenti billing with CAP '123' shows toast 'CAP: 5 cifre' and keeps the typed values (intestatario, cap, citta); Percorso and Corsi tabs render (3 courses, premium 149,00 EUR). Not re-run: the full iteration_1 suite (as requested).",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "GET /api/admin/report", "issue": "Unchanged from iteration 1 (was not in the fix list): 'years' comes from p['at'] while totals use pagatoAt."}
+  ]},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": [
+    {"screen": "Admin at 1920px", "issues": ["Main content is now max-width 1400px. Next to the ~250px sidebar this leaves ~270px empty on the right. Acceptable; optional: center it or raise to ~1600px."]}
+  ]},
+  "test_report_links": ["/app/backend/tests/test_iter2_fixes.py", "/app/backend/tests/test_portale_affiliati.py", "/app/test_reports/pytest/pytest_iter2.xml"],
+  "action_items": ["Optional: report years selector should be built from pagatoAt (leftover minor from iteration 1)"],
+  "critical_code_review_comments": ["Fixes reviewed in code: login ident 'login:{email}' (lowercased); DomIn try/except; re.escape in the emails search; bool() on unlocked; Field ge=1 / gt=0; nquery filters view by VIEW_PERMS; materials $inc filter on deleted != True; BillingForm reloads only when r is truthy and the effect is keyed on JSON.stringify(value). All correct.", "routes_admin.py is 738 lines (>700): consider splitting it."],
+  "updated_files": ["/app/backend/tests/test_iter2_fixes.py"],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% (all retest items + smoke)"},
+  "seed_data_creation": "Created test_it2_* affiliate (draft, domain renewed to 2027-03-01) and a TEST collaborator (deactivated). Created and deleted a TEST material. Inserted and removed temporary TEST notifications. Renewed test_85e75669 to 2028, then set its domain to 2027-05-10 via UI. blu's billing was not changed (the save failed by design).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use tests/test_iter2_fixes.py for regression of these fixes. blu already owns the premium course, so use mario for 'unlocked false' checks. Lockout tests must use throwaway emails."
+}
