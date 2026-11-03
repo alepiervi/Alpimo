@@ -2,7 +2,7 @@
 
 | Ruolo | Email | Password |
 |---|---|---|
-| Admin principale (super) | admin@alpimo.it | Alpimo-Admin-2026 |
+| Admin di prova admin@alpimo.it | DISATTIVATO | — |
 | Affiliato in attesa di approvazione | sole@demo.it | demo1234 |
 | Affiliato approvato (loghi pronti, URL verificati) | mario@demo.it | demo1234 |
 | Affiliato con sito consegnato (dominio in scadenza tra 6 gg) | blu@demo.it | demo1234 |
