@@ -33,3 +33,4 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 - Rimossi tutti i dati di prova (affiliati demo, collaboratori test, admin di prova, materiali/corsi/news TEST, IBAN di esempio); il seed non crea più affiliati demo né IBAN di esempio
 - Unico admin: account privato del titolare (password non registrata nei file); email notifiche admin impostata sul suo indirizzo
 - Date in formato gg/mm/aaaa ovunque (campi di modifica con validazione, visualizzazione, email)
+- Verifica email affiliati sospesa finché Aruba/Brevo non sono configurati (registrazione = verificato); riparte automaticamente per le nuove registrazioni appena una credenziale email è presente

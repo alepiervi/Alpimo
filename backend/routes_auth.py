@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from datetime import timedelta
 import os
 import jwt
-from core import (db, nowiso, now, code6, sha, send_mail, get_settings, uid, hash_pw, check_pw, notify_admins,
+from core import (db, email_status, nowiso, now, code6, sha, send_mail, get_settings, uid, hash_pw, check_pw, notify_admins,
                   set_auth_cookies, current_user, JWT_ALG)
 
 router = APIRouter(prefix="/api/auth")
@@ -85,13 +85,16 @@ async def register(body: RegisterIn, response: Response):
         raise HTTPException(400, "Email già registrata")
     s = await get_settings()
     v, t = s["legali"]["versione"], nowiso()
+    mail_on = any(email_status().values())
+
     u = {"id": uid(), "email": email, "password_hash": hash_pw(body.password), "role": "affiliate", "is_super": False, "nome": "",
-         "perms": [], "verified": False, "active": True, "created_at": t}
+         "perms": [], "verified": not mail_on, "active": True, "created_at": t}
     await db.users.insert_one(u)
     a = new_aff(u["id"], email, "azienda" if body.tipo == "azienda" else "persona")
     a["consensi"] = {"contratto": {"versione": v, "at": t}, "privacy": {"versione": v, "at": t}, "marketing": {"value": body.marketing, "at": t}}
     await db.affiliates.insert_one(a)
-    await send_verify(u)
+    if mail_on:
+        await send_verify(u)
     await notify_admins(f"Nuova registrazione: <b>{email}</b>", "affiliato", u["id"])
     set_auth_cookies(response, u["id"])
     return public_user(u)
