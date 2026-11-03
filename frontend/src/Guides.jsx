@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Ico, Badge, useLoad, useAction, useUI, UploadBox, Field, Empty } from "./ui.jsx";
 import { post, put, del, fileUrl, embedUrl, fd } from "./lib.js";
 
+export const SEZ = [["dashboard", "Panoramica"], ["richieste", "Richieste"], ["affiliati", "Affiliati"], ["ticket", "Ticket"], ["corsi", "Corsi"], ["bacheca", "Bacheca"], ["materiali", "Materiali"], ["scadenze", "Scadenze domini"], ["report", "Report"], ["email", "Registro email"], ["impostazioni", "Impostazioni"]];
 const GCAT = ["Primi passi", "Affiliati", "Pagamenti e fatture", "Assistenza", "Contenuti", "Domini e report", "Impostazioni e team"];
 
 function Video({ g }) {
@@ -11,12 +12,12 @@ function Video({ g }) {
   return null;
 }
 
-function GuidePage({ g, back, canEdit, onEdit }) {
+function GuidePage({ g, back, canEdit, onEdit, inModal }) {
   const { openModal } = useUI();
-  const zoom = (id) => openModal({ title: "", wide: true, noCancel: true, ok: "Chiudi", body: <img src={fileUrl(id)} alt="" style={{ width: "100%", borderRadius: 10 }} />, res: () => {} });
+  const zoom = (id) => inModal ? window.open(fileUrl(id), "_blank") : openModal({ title: "", wide: true, noCancel: true, ok: "Chiudi", body: <img src={fileUrl(id)} alt="" style={{ width: "100%", borderRadius: 10 }} />, res: () => {} });
   return (
     <div data-testid="guide-page">
-      <div className="row between"><button className="back" onClick={back} data-testid="guide-back">← Tutte le guide</button>{canEdit && <button className="btn sm" onClick={onEdit} data-testid="guide-edit">Modifica guida</button>}</div>
+      {!inModal && <div className="row between"><button className="back" onClick={back} data-testid="guide-back">← Tutte le guide</button>{canEdit && <button className="btn sm" onClick={onEdit} data-testid="guide-edit">Modifica guida</button>}</div>}
       <div className="guide-h"><Badge k="info">{g.categoria}</Badge><h2>{g.titolo}</h2>{g.descrizione && <p className="muted">{g.descrizione}</p>}<span className="small muted">Aggiornata il {fd(g.at)}</span></div>
       {(g.video || g.videoUrl) && <div className="card" style={{ marginBottom: 16 }}><h3 style={{ marginBottom: 10 }}><Ico n="play" s={16} /> Video guida</h3><Video g={g} /></div>}
       {g.passi.map((p, i) => (
@@ -30,7 +31,9 @@ function GuidePage({ g, back, canEdit, onEdit }) {
 }
 
 function GuideEditor({ g, back }) {
-  const [f, setF] = useState(g || { titolo: "", categoria: GCAT[0], descrizione: "", ordine: 100, passi: [{ titolo: "", testo: "", immagine: null }], video: null, videoUrl: "" });
+  const [f, setF] = useState(g || { titolo: "", categoria: GCAT[0], descrizione: "", ordine: 100, passi: [{ titolo: "", testo: "", immagine: null }], video: null, videoUrl: "", sezioni: [] });
+  const sz = f.sezioni || [];
+  const togS = (k) => setF({ ...f, sezioni: sz.includes(k) ? sz.filter((x) => x !== k) : [...sz, k] });
   const act = useAction();
   const { ask } = useUI();
   const setP = (i, k, v) => setF({ ...f, passi: f.passi.map((p, j) => (j === i ? { ...p, [k]: v } : p)) });
@@ -45,6 +48,8 @@ function GuideEditor({ g, back }) {
           <Field label="Categoria"><select value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} data-testid="guide-category">{GCAT.map((c) => <option key={c}>{c}</option>)}</select></Field>
           <Field label="Ordine"><input type="number" value={f.ordine} onChange={(e) => setF({ ...f, ordine: +e.target.value })} /></Field></div>
         <Field label="Descrizione breve"><input type="text" value={f.descrizione} onChange={(e) => setF({ ...f, descrizione: e.target.value })} data-testid="guide-desc" /></Field>
+        <Field label="Mostra il pulsante Guida in queste sezioni"><div className="row" style={{ flexWrap: "wrap", gap: 6 }} data-testid="guide-sections">{SEZ.map(([k, l]) => (
+          <button type="button" key={k} className={`btn sm ${sz.includes(k) ? "primary" : "ghost"}`} onClick={() => togS(k)} data-testid={`guide-section-${k}`}>{l}</button>))}</div></Field>
         <div className="grid2">
           <Field label="Link video (YouTube, Vimeo, Drive)"><input type="text" value={f.videoUrl || ""} onChange={(e) => setF({ ...f, videoUrl: e.target.value })} data-testid="guide-video-url" /></Field>
           <div>{f.video ? <div className="row" style={{ marginTop: 22 }}><Badge k="ok">Video caricato</Badge><button className="btn sm ghost" onClick={() => setF({ ...f, video: null })}>Rimuovi</button></div>
@@ -98,4 +103,24 @@ export default function Guides({ user }) {
       {!V.length && <Empty>Nessuna guida trovata.</Empty>}
     </div>
   );
+}
+
+function HelpBody({ G }) {
+  const [i, setI] = useState(0);
+  return (
+    <div data-testid="section-help-modal">
+      {G.length > 1 && <div className="row" style={{ flexWrap: "wrap", gap: 6, marginBottom: 12 }}>{G.map((x, j) => (
+        <button key={x.id} className={`btn sm ${i === j ? "primary" : "ghost"}`} onClick={() => setI(j)} data-testid={`section-help-tab-${j}`}>{x.titolo}</button>))}</div>}
+      <GuidePage key={G[i].id} g={G[i]} inModal />
+    </div>
+  );
+}
+
+export function SectionHelp({ view }) {
+  const [L] = useLoad("/admin/guides");
+  const { openModal } = useUI();
+  const G = (L || []).filter((x) => (x.sezioni || []).includes(view));
+  if (!G.length) return null;
+  const open = () => openModal({ title: "Guida della sezione", wide: true, noCancel: true, ok: "Chiudi", body: <HelpBody G={G} />, res: () => {} });
+  return <div className="help-bar"><button className="btn sm help-btn" onClick={open} data-testid="section-help-btn"><Ico n="book" s={14} />Guida{G.length > 1 && <span className="help-n">{G.length}</span>}</button></div>;
 }

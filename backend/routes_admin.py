@@ -871,6 +871,7 @@ class GuideIn(BaseModel):
     passi: List[dict] = []
     video: Optional[str] = None
     videoUrl: Optional[str] = None
+    sezioni: List[str] = []
 
 
 def clean_steps(L):

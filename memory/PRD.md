@@ -42,3 +42,6 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 - Email creazione utente team non contiene piu la password
 - Sezione Guide (menu admin, tutto il team): 16 guide con 34 passaggi, 29 screenshot reali e 4 video registrati (tour, URL/pagamento, ticket, approvazione); editor guide per accesso completo; seed automatico da backend/seed_guides.json in nuovi ambienti
 - Script di cattura in /root/guide_*.py (playwright in /root/pwenv) per rigenerare screenshot/video
+
+## 2026-06 — Guida contestuale
+- Pulsante "Guida" in ogni sezione admin (campo `sezioni` sulle guide), apre la guida in finestra con schede se ce ne sono piu di una. Assegnazione sezioni modificabile nell editor guide.

@@ -5,7 +5,7 @@ import Scheda from "./AdminScheda.jsx";
 import Tickets from "./Tickets.jsx";
 import { AdminCourses } from "./Courses.jsx";
 import { AdminNews, AdminMats, Settings } from "./AdminMisc.jsx";
-import Guides from "./Guides.jsx";
+import Guides, { SectionHelp } from "./Guides.jsx";
 
 const MENU = [["dashboard", "Panoramica", "home", null], ["richieste", "Richieste", "inbox", "richieste"], ["affiliati", "Affiliati", "users", "affiliati"], ["ticket", "Ticket", "ticket", "ticket"],
   ["corsi", "Corsi", "book", "corsi"], ["bacheca", "Bacheca", "news", "bacheca"], ["materiali", "Materiali", "folder", "materiali"], ["scadenze", "Scadenze domini", "calendar", "scadenze"],
@@ -45,6 +45,7 @@ export default function AdminApp({ user, logout }) {
           ))}
         </nav>
         <main className="amain">
+          {V !== "guide" && <SectionHelp view={V} />}
           {V === "dashboard" && <Dash user={user} nav={nav} />}
           {V === "richieste" && <Richieste nav={nav} canOpen={canP(user, "affiliati")} />}
           {V === "affiliati" && (sel ? <Scheda id={sel} user={user} back={() => setSel(null)} /> : <Affiliati nav={nav} />)}

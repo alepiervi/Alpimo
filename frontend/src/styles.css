@@ -451,3 +451,9 @@ body{background-color:var(--bg);background-image:radial-gradient(rgba(27,117,176
 .gshot{display:block;margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden;padding:0;cursor:zoom-in;background:#f6f8fb;position:relative;width:100%}
 .gshot img{width:100%;display:block}
 .gshot span{position:absolute;right:10px;bottom:10px;background:rgba(20,38,59,.75);color:#fff;font-size:12px;padding:4px 10px;border-radius:99px}
+
+.help-bar{display:flex;justify-content:flex-end;margin-bottom:10px}
+.help-btn{gap:6px;border-radius:999px;transition:transform .2s,background-color .2s}
+.help-btn:hover{transform:translateY(-1px)}
+.help-n{background:var(--line);border-radius:99px;font-size:11px;padding:1px 7px;margin-left:2px}
+.modal [data-testid="guide-page"] .guide-h{margin-top:0}
