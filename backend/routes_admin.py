@@ -860,3 +860,51 @@ async def domain_job():
         await send_mail(a["email"], f"Il tuo dominio {url} scade tra {d} giorni", f"Ciao {ag},\n\nil dominio {url} scade il {itd(a['dominio']['scadenza'])}. Ti contatteremo per il rinnovo.", a["id"])
         await notify_admins(f"Dominio <b>{url}</b> in scadenza tra {d} giorni", "scadenze", a["id"])
         await db.affiliates.update_one({"id": a["id"]}, {"$addToSet": {"dominio.inviati": {"$each": [x for x in REM if x >= r]}}})
+
+
+# ---------- guide per il team ----------
+class GuideIn(BaseModel):
+    titolo: str
+    categoria: str = "Generale"
+    descrizione: str = ""
+    ordine: int = 0
+    passi: List[dict] = []
+    video: Optional[str] = None
+    videoUrl: Optional[str] = None
+
+
+def clean_steps(L):
+    return [{"titolo": str(x.get("titolo") or ""), "testo": str(x.get("testo") or ""), "immagine": x.get("immagine") or None} for x in L]
+
+
+@router.get("/guides")
+async def guides(u=Depends(admin_user)):
+    return await db.guides.find({}, {"_id": 0}).sort([("ordine", 1), ("titolo", 1)]).to_list(500)
+
+
+@router.post("/guides")
+async def guide_new(body: GuideIn, u=Depends(super_user)):
+    g = {**body.model_dump(), "passi": clean_steps(body.passi), "id": uid(), "at": nowiso()}
+    for f in [g["video"]] + [p["immagine"] for p in g["passi"]]:
+        if f:
+            await db.files.update_one({"id": f}, {"$set": {"owner": "admin-guide"}})
+    await db.guides.insert_one(dict(g))
+    return {"id": g["id"]}
+
+
+@router.put("/guides/{gid}")
+async def guide_upd(gid: str, body: GuideIn, u=Depends(super_user)):
+    g = {**body.model_dump(), "passi": clean_steps(body.passi), "at": nowiso()}
+    for f in [g["video"]] + [p["immagine"] for p in g["passi"]]:
+        if f:
+            await db.files.update_one({"id": f}, {"$set": {"owner": "admin-guide"}})
+    r = await db.guides.update_one({"id": gid}, {"$set": g})
+    if not r.matched_count:
+        raise HTTPException(404, "Guida non trovata")
+    return {"ok": True}
+
+
+@router.delete("/guides/{gid}")
+async def guide_del(gid: str, u=Depends(super_user)):
+    await db.guides.delete_one({"id": gid})
+    return {"ok": True}

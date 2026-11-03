@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os  # noqa: E402
+import json  # noqa: E402
 import asyncio  # noqa: E402
 import logging  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
@@ -14,6 +15,7 @@ import routes_admin  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("alpimo")
+GUIDE_SEED = os.path.join(os.path.dirname(__file__), "seed_guides.json")
 app = FastAPI(title="Portale Affiliati Alpimo")
 for r in (routes_auth.router, routes_common.router, routes_aff.router, routes_admin.router):
     app.include_router(r)
@@ -60,6 +62,13 @@ async def startup_tasks():
     if not s.get("seeded"):
         await db.settings.update_one({"_id": "main"}, {"$set": {"seeded": True}})
         await seed_demo()
+    if not await db.guides.count_documents({}) and os.path.exists(GUIDE_SEED):
+        data = json.load(open(GUIDE_SEED))
+        for f in data["files"]:
+            if not await db.files.find_one({"id": f["id"]}):
+                await db.files.insert_one(f)
+        if data["guides"]:
+            await db.guides.insert_many(data["guides"])
 
 
 async def scheduler():

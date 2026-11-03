@@ -5,10 +5,11 @@ import Scheda from "./AdminScheda.jsx";
 import Tickets from "./Tickets.jsx";
 import { AdminCourses } from "./Courses.jsx";
 import { AdminNews, AdminMats, Settings } from "./AdminMisc.jsx";
+import Guides from "./Guides.jsx";
 
 const MENU = [["dashboard", "Panoramica", "home", null], ["richieste", "Richieste", "inbox", "richieste"], ["affiliati", "Affiliati", "users", "affiliati"], ["ticket", "Ticket", "ticket", "ticket"],
   ["corsi", "Corsi", "book", "corsi"], ["bacheca", "Bacheca", "news", "bacheca"], ["materiali", "Materiali", "folder", "materiali"], ["scadenze", "Scadenze domini", "calendar", "scadenze"],
-  ["report", "Report", "chart", "report"], ["email", "Registro email", "mail", "email"], ["impostazioni", "Impostazioni", "settings", null]];
+  ["report", "Report", "chart", "report"], ["email", "Registro email", "mail", "email"], ["impostazioni", "Impostazioni", "settings", null], ["guide", "Guide", "book", null]];
 
 export const canP = (u, p) => !p || u.is_super || (u.perms || []).includes(p);
 
@@ -55,6 +56,7 @@ export default function AdminApp({ user, logout }) {
           {V === "report" && <Report />}
           {V === "email" && <Emails />}
           {V === "impostazioni" && <Settings user={user} />}
+          {V === "guide" && <Guides user={user} />}
         </main>
       </div>
     </div>

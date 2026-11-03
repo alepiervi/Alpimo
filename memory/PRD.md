@@ -40,3 +40,5 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 - Aziende (Impostazioni > Aziende, solo accesso completo): ogni azienda ha dati pagamento propri (campi vuoti = predefinito); affiliato assegnato in Dati interni
 - Utenti admin con visibilita per azienda (tutte / selezionate) + permessi; Master (is_master) protetto; utenti "Accesso completo come il Master" (is_super)
 - Email creazione utente team non contiene piu la password
+- Sezione Guide (menu admin, tutto il team): 16 guide con 34 passaggi, 29 screenshot reali e 4 video registrati (tour, URL/pagamento, ticket, approvazione); editor guide per accesso completo; seed automatico da backend/seed_guides.json in nuovi ambienti
+- Script di cattura in /root/guide_*.py (playwright in /root/pwenv) per rigenerare screenshot/video
