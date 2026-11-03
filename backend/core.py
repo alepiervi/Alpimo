@@ -339,5 +339,5 @@ async def pag_for(a):
     if a and a.get("aziendaId"):
         c = await db.companies.find_one({"id": a["aziendaId"]}, {"_id": 0})
         if c and (c.get("pag") or {}).get("iban"):
-            return c["pag"]
+            return {**s["pag"], **{k: v for k, v in c["pag"].items() if v}}
     return s["pag"]

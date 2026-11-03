@@ -106,7 +106,7 @@ async def notifs_all(u=Depends(current_user)):
 
 @router.post("/notifications/{nid}/read")
 async def notif_read(nid: str, u=Depends(current_user)):
-    await db.notifications.update_one({"id": nid, "to": nkey(u)}, {"$set": {"letto": True}})
+    await db.notifications.update_one({**(await nquery(u)), "id": nid}, {"$set": {"letto": True}})
     return {"ok": True}
 
 

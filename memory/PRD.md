@@ -37,3 +37,6 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 - Logo + URL definitivo scelti => proposte non scelte eliminate (sceltaFinale), scelta bloccata
 - Dati interni admin: azienda affiliante e piattaforma acquisto dominio (in lista, scadenze, export CSV; nascosti all affiliato)
 - Eliminazione affiliato (admin, permesso affiliati) con conferma scrivendo ELIMINA: cancella account, dati, documenti, pagamenti, ticket, corsi, notifiche, file
+- Aziende (Impostazioni > Aziende, solo accesso completo): ogni azienda ha dati pagamento propri (campi vuoti = predefinito); affiliato assegnato in Dati interni
+- Utenti admin con visibilita per azienda (tutte / selezionate) + permessi; Master (is_master) protetto; utenti "Accesso completo come il Master" (is_super)
+- Email creazione utente team non contiene piu la password

@@ -105,7 +105,7 @@ function CompanyForm({ c, back }) {
     <div data-testid="company-form">
       <button className="back" onClick={back}>← Aziende</button>
       <div className="card" style={{ marginBottom: 14 }}><Field label="Nome azienda"><input type="text" value={nome} onChange={(e) => setNome(e.target.value)} data-testid="company-name" /></Field>
-        <p className="small muted" style={{ marginTop: 8 }}>Lascia vuoto l'IBAN per usare il pagamento predefinito.</p></div>
+        <p className="small muted" style={{ marginTop: 8 }}>Lascia vuoto l'IBAN per usare il pagamento predefinito. Gli altri campi lasciati vuoti (causale, importi, termine…) prendono i valori del pagamento predefinito.</p></div>
       <PagSettings value={c.pag || {}} onSave={(p) => (c.id ? put(`/admin/companies/${c.id}`, { nome, pag: p }) : post("/admin/companies", { nome, pag: p }))} reload={back} />
     </div>
   );

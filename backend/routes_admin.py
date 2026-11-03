@@ -136,6 +136,9 @@ async def affiliate(aid: str, u=Depends(need("affiliati"))):
 @router.delete("/affiliates/{aid}")
 async def delete_aff(aid: str, u=Depends(need("affiliati"))):
     a = await get_aff(aid, u)
+    tids = [t["id"] for t in await db.tickets.find({"affId": aid}, {"_id": 0, "id": 1}).to_list(10000)]
+    await db.notifications.delete_many({"ref": {"$in": tids}})
+    await db.email_log.delete_many({"$or": [{"to": a["email"]}, {"ref": {"$in": tids + [aid]}}]})
     for c in ("documents", "payments", "tickets", "progress"):
         await db[c].delete_many({"affId": aid})
     await db.notifications.delete_many({"$or": [{"to": aid}, {"ref": aid}]})
@@ -321,7 +324,7 @@ async def internal(aid: str, body: InternalIn, u=Depends(need("affiliati"))):
 
 @router.get("/internal-options")
 async def internal_options(u=Depends(admin_user)):
-    return {"registrar": sorted(x for x in await db.affiliates.distinct("registrar") if x)}
+    return {"registrar": sorted(x for x in await db.affiliates.distinct("registrar", aff_q(u)) if x)}
 
 
 PAG_KEYS = ("intestatario", "iban", "banca", "bic", "importo", "iva", "rinnovo", "causale", "scadenza", "note")
