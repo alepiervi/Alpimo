@@ -25,5 +25,6 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 
 ## Backlog
 - P0: inserire credenziali ARUBA_SMTP_USER / ARUBA_SMTP_PASSWORD e BREVO_API_KEY / BREVO_SENDER_EMAIL (email ora solo registrate)
-- P1: ACL file legata all'acquisto dei corsi Premium; date picker in formato italiano; streaming video con range
+- P1: date picker in formato italiano; streaming video con range
+- Fatto (03/11/2026): video MP4 dei corsi protetti lato server (Premium solo dopo acquisto confermato; tutti i video solo con pagamento sito confermato e corso pubblicato)
 - P2: suddividere routes_admin.py; job domini idempotente su più repliche

@@ -39,6 +39,20 @@ async def upload(file: UploadFile = File(...), owner: str = Form(""), u=Depends(
     return {"id": doc["id"], "name": doc["name"], "type": ctype, "size": doc["size"]}
 
 
+async def check_course_video(fid, u):
+    c = await db.courses.find_one({"lezioni.file": fid}, {"_id": 0})
+    if not c:
+        return
+    a = await db.affiliates.find_one({"id": u["id"]}, {"_id": 0, "pagamento": 1})
+    if not c.get("pubblicato") or (a or {}).get("pagamento") != "confermato":
+        raise HTTPException(403, "Video non disponibile")
+    idx = next(i for i, l in enumerate(c["lezioni"]) if l.get("file") == fid)
+    if c.get("premium") and idx > 0:
+        paid = await db.payments.find_one({"affId": u["id"], "kind": "corso", "ref": c["id"], "stato": "pagato"})
+        if not paid:
+            raise HTTPException(403, "Video riservato a chi ha acquistato il corso")
+
+
 @router.get("/files/{fid}")
 async def download(fid: str, dl: int = 0, u=Depends(current_user)):
     f = await db.files.find_one({"id": fid, "is_deleted": False})
@@ -46,6 +60,8 @@ async def download(fid: str, dl: int = 0, u=Depends(current_user)):
         raise HTTPException(404, "File non trovato")
     if u["role"] != "admin" and f["owner"] not in (u["id"], "public"):
         raise HTTPException(403, "Accesso negato")
+    if u["role"] != "admin":
+        await check_course_video(fid, u)
     data, ct = get_object(f["path"])
     disp = "attachment" if dl else "inline"
     safe = f["name"].encode("ascii", "ignore").decode().replace('"', "") or "file"
