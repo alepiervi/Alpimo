@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 from core import (db, nowiso, today, uid, admin_user, need, super_user, can, get_settings, notify, notify_admins, send_mail, aff_name,
-                  url_def, enc, dec, file_info, itd, scope_all, aff_q, scope_ids, pag_for, add_biz, add_year, days_to, hash_pw, next_seq, PERMS, email_status, resolve_role)
+                  url_def, enc, dec, file_info, itd, scope_all, aff_q, scope_ids, pag_for, add_biz, add_year, days_to, hash_pw, next_seq, PERMS, email_status, resolve_role, tk_rep_q)
 from routes_aff import billing_errors
 
 router = APIRouter(prefix="/api/admin")
@@ -84,9 +84,9 @@ async def dashboard(u=Depends(admin_user)):
         for p in await db.payments.find({"kind": "corso", "stato": "in_verifica", "affId": {"$in": [r["id"] for r in R]}}, {"_id": 0}).to_list(500):
             todo.append({"k": "corso", "t": f"Acquisto corso da verificare: {p['descrizione']}", "id": p["ref"], "view": "corsi"})
     rid = {"$in": [r["id"] for r in R]}
-    tk_open = await db.tickets.count_documents({"stato": {"$ne": "chiuso"}, "affId": rid}) if P("ticket") else 0
+    tk_open = await db.tickets.count_documents({"stato": {"$ne": "chiuso"}, "affId": rid, **tk_rep_q(u)}) if P("ticket") else 0
     if P("ticket"):
-        for t in await db.tickets.find({"lettoAdmin": False, "affId": rid}, {"_id": 0}).to_list(200):
+        for t in await db.tickets.find({"lettoAdmin": False, "affId": rid, **tk_rep_q(u)}, {"_id": 0}).to_list(200):
             todo.append({"k": "ticket", "t": f"Ticket non letto #{t['num']}: {t['oggetto']}", "id": t["id"], "view": "ticket"})
     dom = sorted([r for r in R if r["scadenza"] and days_to(r["scadenza"]) <= 30], key=lambda r: r["scadenza"]) if P("scadenze") else []
     return {"kpi": {"richieste": len([r for r in R if r["stato"] == "in_attesa"]), "ricevute": len([r for r in R if r["pagamento"] == "in_verifica"]),
@@ -99,7 +99,7 @@ async def counts(u=Depends(admin_user)):
     ids = await scope_ids(u)
     f = {} if ids is None else {"affId": {"$in": list(ids)}}
     return {"richieste": await db.affiliates.count_documents({"stato": "in_attesa", **aff_q(u)}),
-            "ticket": await db.tickets.count_documents({"lettoAdmin": False, **f}),
+            "ticket": await db.tickets.count_documents({"lettoAdmin": False, **f, **tk_rep_q(u)}),
             "corsi": await db.payments.count_documents({"kind": "corso", "stato": "in_verifica", **f})}
 
 
@@ -129,7 +129,7 @@ async def affiliate(aid: str, u=Depends(need("affiliati"))):
     courses = {c["id"]: c for c in await db.courses.find({}, {"_id": 0}).to_list(500)}
     a["progress"] = [{"titolo": courses[p["courseId"]]["titolo"], "fatte": len(p.get("fatte", [])), "tot": len(courses[p["courseId"]].get("lezioni", [])),
                       "completatoAt": p.get("completatoAt")} for p in await db.progress.find({"affId": aid}, {"_id": 0}).to_list(500) if p["courseId"] in courses]
-    a["tickets"] = await db.tickets.find({"affId": aid}, {"_id": 0, "messaggi": 0}).sort("createdAt", -1).to_list(200)
+    a["tickets"] = await db.tickets.find({"affId": aid, **tk_rep_q(u)}, {"_id": 0, "messaggi": 0}).sort("createdAt", -1).to_list(200)
     return a
 
 
@@ -741,6 +741,10 @@ async def emails(q: str = "", ref: str = "", u=Depends(need("email"))):
         f["to"] = {"$in": [a["email"] for a in await db.affiliates.find(aff_q(u), {"_id": 0, "email": 1}).to_list(10000)]}
     if ref:
         f["ref"] = ref
+    rq = tk_rep_q(u)
+    if rq:
+        hidden = [t["id"] for t in await db.tickets.find({"reparto": {"$nin": rq["reparto"]["$in"]}}, {"_id": 0, "id": 1}).to_list(10000)]
+        f["ref"] = {"$nin": hidden, **({"$eq": ref} if ref else {})}
     if q:
         f["$or"] = [{"to": {"$regex": re.escape(q), "$options": "i"}}, {"subject": {"$regex": re.escape(q), "$options": "i"}}]
     return {"items": await db.email_log.find(f, {"_id": 0}).sort("at", -1).to_list(300), "status": email_status()}

@@ -46,3 +46,5 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 ## 2026-06 — Guida contestuale
 - Pulsante "Guida" in ogni sezione admin (campo `sezioni` sulle guide), apre la guida in finestra con schede se ce ne sono piu di una. Assegnazione sezioni modificabile nell editor guide.
 - Tipologia sito (Base/Plus/Completo) nei Dati interni della scheda admin, colonna+filtro lista Affiliati, export CSV, report "Siti per tipologia". Nascosta agli affiliati, non incide sul prezzo.
+- Ticket per reparti (collection reparti, seed Amministrazione/Travel/IT · Sito internet/IT · Email; Master li gestisce in Impostazioni > Ruoli e reparti). Affiliato sceglie reparto, admin lo sposta (POST /api/tickets/{id}/reparto). Ruoli riutilizzabili (collection ruoli: perms+reparti, user.ruoloId risolto in core.resolve_role). Utenti con reparti vedono solo quei ticket (tk_rep_q) anche in counts/dashboard/scheda/registro email; email ticket ad admin generale + utenti del reparto. Rotte in backend/routes_team.py.
+- Known: notifiche admin condivise (segnare letto vale per tutti) - da separare per utente.

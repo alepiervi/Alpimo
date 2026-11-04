@@ -176,7 +176,7 @@ function Team({ me }) {
   const tog = (k, id, on) => setF({ ...f, [k]: on ? [...f[k], id] : f[k].filter((x) => x !== id) });
   return (
     <div data-testid="team-settings">
-      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 12 }}><button className="btn primary" onClick={() => setF({ nome: "", email: "", password: genPw(), perms: [], active: true, full: false, tutteAziende: false, aziende: [], ruoloId: "", reparti: [] })} data-testid="team-new-btn">+ Aggiungi utente</button></div>
+      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 12 }}><button className="btn primary" onClick={() => setF({ nome: "", email: "", password: genPw(), perms: [], active: true, full: false, tutteAziende: true, aziende: [], ruoloId: "", reparti: [] })} data-testid="team-new-btn">+ Aggiungi utente</button></div>
       {f && <div className="card" style={{ marginBottom: 16 }} data-testid="team-form"><div style={{ display: "grid", gap: 12 }}>
         <div className="grid3"><Field label="Nome"><input type="text" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} data-testid="team-name" /></Field>
           <Field label="Email"><input type="email" value={f.email} disabled={!!f.id} onChange={(e) => setF({ ...f, email: e.target.value })} data-testid="team-email" /></Field>
@@ -188,6 +188,7 @@ function Team({ me }) {
             <label><input type="radio" checked={!f.tutteAziende} onChange={() => setF({ ...f, tutteAziende: false })} data-testid="team-scope-some" />Solo le aziende selezionate</label></div>
           {!f.tutteAziende && (C.length ? <div className="permgrid">{C.map((c) => <label className="chk" key={c.id}><input type="checkbox" checked={f.aziende.includes(c.id)} onChange={(e) => tog("aziende", c.id, e.target.checked)} data-testid={`team-company-${c.id}`} />{c.nome}</label>)}</div>
             : <div className="note warn small">Nessuna azienda creata: aggiungile in Impostazioni &gt; Aziende.</div>)}
+          {!f.tutteAziende && !f.aziende.length && <div className="note warn small" data-testid="team-no-company-warn">Nessuna azienda selezionata: questo utente non vedrà affiliati né ticket.</div>}
           <div className="lbl">Ruolo</div>
           <select value={f.ruoloId} onChange={(e) => setF({ ...f, ruoloId: e.target.value })} data-testid="team-ruolo"><option value="">Personalizzato (scegli sezioni e reparti qui sotto)</option>{RL.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}</select>
           {f.ruoloId ? <div className="note info small">Sezioni e reparti vengono dal ruolo: modificali in Impostazioni &gt; Ruoli e reparti.</div> : <>

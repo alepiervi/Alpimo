@@ -54,7 +54,7 @@ function NewTicket({ R, onDone }) {
         <Field label="Oggetto"><input type="text" value={f.oggetto} onChange={(e) => setF({ ...f, oggetto: e.target.value })} data-testid="ticket-subject" /></Field>
         <Field label="Priorità"><select value={f.priorita} onChange={(e) => setF({ ...f, priorita: e.target.value })} data-testid="ticket-priority"><option value="bassa">Bassa</option><option value="media">Media</option><option value="alta">Alta</option></select></Field>
         <Field label="Descrizione"><textarea value={f.testo} onChange={(e) => setF({ ...f, testo: e.target.value })} data-testid="ticket-text" /></Field>
-        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={send} data-testid="ticket-submit">Invia ticket</button></div>
+        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={send} disabled={!f.reparto} title={f.reparto ? "" : "Scegli prima il reparto"} data-testid="ticket-submit">Invia ticket</button></div>
       </div>
     </div>
   );

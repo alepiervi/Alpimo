@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 4: tested ticket departments (reparti) and reusable team roles (ruoli). Backend: 16/16 pytest pass (tests/test_iter4_reparti_ruoli.py). Checked: the 4 seeded reparti; reparto create/rename/delete (400 on empty name, 404 on unknown id, delete blocked while it has tickets, delete works once they are moved); role create/edit with invalid perms and reparti filtered out; role delete blocked while assigned; team user with a role (login and GET /team show perms, reparti and ruoloNome resolved from the role); custom user with perms and reparti; affiliate ticket without reparto or with an invalid one returns 400 'Scegli il reparto'; reparto-scoped GET /tickets, 404 on other tickets' detail and msg, notifications limited to the user's reparti; master sees all; POST /tickets/{id}/reparto (admin moves, affiliate gets 403, invalid reparto 400, an IT user who moves a ticket out loses access); new-ticket and move emails sent to the reparto user and the admin email (status non_configurato). UI as Master: Ruoli e reparti tab (add, rename through the modal, delete an empty reparto, create a role with Ticket pre-checked and 2 IT reparti, edit it to add the email perm, delete blocked with a toast); Team admin (role select hides the perm checkboxes, row shows the role badge and reparti, custom user with team-perm-ticket and team-rep-Travel). Affiliate UI: 4 reparto buttons; submitting without one shows the 'Scegli il reparto' toast; an IT ticket and an Amministrazione ticket were created, and the list shows reparto pills. IT role user UI: menu shows only Panoramica, Ticket, Registro email, Impostazioni and Guide; only the IT ticket is listed; the bell shows only the IT ticket notification. Master tickets UI: reparto pills, the filter works, the detail select moved the ticket to IT · Email with a toast, the pill updated, and the ticket's email list shows the move email to the IT user. Regression: the Guida button opens its modal and the Affiliati tipologia filter (Base/Plus/Completo) is present. Bugs found: the reparto restriction is not applied in /admin/counts, /admin/dashboard or the affiliate scheda.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/admin/counts and GET /api/admin/dashboard", "issue": "Reparto restriction missing. Reproduced: an IT-only role user saw the Ticket menu badge at 2 and dashboard kpi.ticket at 2 while only 1 ticket was visible to them. The dashboard todo list also showed 'Ticket non letto #T-0005: TEST UI AMM ticket' (an Amministrazione ticket), leaking the subject of a ticket from another reparto. Fix: merge tk_rep_q(u) into the ticket queries at routes_admin.py lines 87, 89 and 102.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/admin/affiliates/{aid}", "issue": "a['tickets'] (line 132) lists all of the affiliate's tickets without tk_rep_q. A reparto-limited user who also has the affiliati perm sees other reparti's ticket subjects in the scheda, but gets 404 when opening them. Add **tk_rep_q(u)."},
+      {"endpoint": "GET /api/admin/emails", "issue": "A reparto-limited user with the 'email' perm sees the emails of all tickets, e.g. the [Amministrazione] new-ticket email body, which includes the message. Filtering only applies to the company scope. Decide whether ticket emails (ref = ticket id) should be filtered by reparto."},
+      {"endpoint": "core.reparto_emails", "issue": "Team users with ticket perm and NO reparti ('no reparti = all' for visibility) never receive reparto emails; only users who list that reparto explicitly do. Confirm this is intended, or include users with empty reparti."},
+      {"endpoint": "POST /api/notifications/{nid}/read", "issue": "Carried over from iteration 3, still open: notifications are shared by 'admin', so a reparto-limited user doing read-all or opening a ticket marks them read for the master too."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Admin sidebar Ticket badge / Dashboard KPI", "issue": "Shows the count for all reparti for reparto-limited users (backend counts bug)", "selector": "[data-testid='nav-ticket'] .count", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Team admin > Aggiungi utente", "issues": ["A new non-full user defaults to 'Solo le aziende selezionate' with no company selected, so a role user created with the defaults sees 'nessuna azienda' and NO tickets at all. The 'Ruolo' choice looks like it should be enough, which makes this easy to miss. Consider defaulting to 'Tutte le aziende' or warning when nothing is selected."]},
+      {"screen": "Affiliate Nuovo ticket", "issues": ["No reparto is pre-selected and the 'Scegli il reparto' error only appears as a toast after submit. Consider inline validation or highlighting the reparto buttons."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter4_reparti_ruoli.py", "/app/test_reports/pytest/pytest_iter4.xml"],
+  "action_items": [
+    "Apply tk_rep_q(u) to the ticket counts/todo in /admin/dashboard (lines 87, 89) and /admin/counts (line 102) in routes_admin.py",
+    "Apply tk_rep_q(u) to a['tickets'] in GET /admin/affiliates/{aid}",
+    "Decide whether /admin/emails should hide ticket emails of other reparti for reparto-limited users",
+    "Optional: default new team users to 'Tutte le aziende' or warn when no company is selected"
+  ],
+  "critical_code_review_comments": [
+    "resolve_role is correctly applied in current_user, login and GET /team. team_fields stores perms=[] and reparti=[] when ruoloId is set, so changes to the role reach its users immediately. Good.",
+    "tk_access, the tickets list and nquery all honour tk_rep_q. Legacy tickets with no reparto field would be invisible to every reparto-limited user (currently 0 such tickets in the DB).",
+    "Ruoli and Team edit pass the whole row object (including 'utenti', 'ruoloNome' and so on) to PUT. Pydantic ignores the extras, so this is harmless.",
+    "routes_admin.py is 921 lines (>700): split it (team/companies/settings into their own modules)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter4_reparti_ruoli.py"],
+  "success_rate": {"backend": "100% (16/16) of the new endpoints; 1 HIGH issue in dashboard/counts found manually", "frontend": "~95%: all requested flows work; ticket badge/KPI count wrong for reparto users"},
+  "seed_data_creation": "Everything I created has been deleted: the TEST_ reparti (API and UI runs), the TEST_ roles, team users test_it_*/test_cu_*/test_ui_it/test_ui_cu (removed from db.users along with their email_log rows and login_attempts), and test affiliates test_aff_*/test_ui_aff (deleted through DELETE /api/admin/affiliates, which removed their tickets, notifications and email logs). The 4 original reparti are intact with their original names and ids. The Master and Tribù were not modified. Side effect: the ticket counter advanced, so the next real ticket will be T-0006 or later.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with env MASTER_EMAIL / MASTER_PW (not stored in files) plus REACT_APP_BACKEND_URL, using -p no:xdist. The tests run in order with shared state S, and test_99 cleans up (it deletes the team users directly through motor). Original reparto ids: Amministrazione 9b8d8ce1bbcb, Travel 1637d6cafccd, IT · Sito internet 774f57cbb729, IT · Email 61b55e376c33. To retest the bug: log in as a role user limited to IT and compare GET /api/admin/counts .ticket and /admin/dashboard kpi.ticket/todo with len(GET /api/tickets).",
+  "rca of the issue": "The reparto restriction was added only in routes_common (tickets, tk_access, nquery). routes_admin.dashboard and counts build their ticket filters from scope_ids only (company scope) and never call tk_rep_q, so a reparto-limited user gets counts and todo items for every reparto."
+}
