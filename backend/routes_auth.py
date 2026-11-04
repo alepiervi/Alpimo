@@ -4,7 +4,7 @@ from datetime import timedelta
 import os
 import jwt
 from core import (db, email_status, nowiso, now, code6, sha, send_mail, get_settings, uid, hash_pw, check_pw, notify_admins,
-                  set_auth_cookies, current_user, JWT_ALG)
+                  set_auth_cookies, current_user, JWT_ALG, resolve_role)
 
 router = APIRouter(prefix="/api/auth")
 
@@ -52,7 +52,7 @@ class PwIn(BaseModel):
 
 
 def public_user(u):
-    return {k: u.get(k) for k in ("id", "email", "role", "is_super", "is_master", "tutteAziende", "aziende", "nome", "perms", "verified", "active")}
+    return {k: u.get(k) for k in ("id", "email", "role", "is_super", "is_master", "tutteAziende", "aziende", "nome", "perms", "verified", "active", "reparti", "ruoloNome")}
 
 
 async def send_verify(u):
@@ -116,7 +116,7 @@ async def login(body: LoginIn, response: Response):
         raise HTTPException(403, "Account disattivato")
     await db.login_attempts.delete_many({"identifier": ident})
     set_auth_cookies(response, u["id"])
-    return public_user(u)
+    return public_user(await resolve_role(u))
 
 
 @router.post("/logout")

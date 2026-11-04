@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Response
 from pydantic import BaseModel
 from core import (db, nowiso, uid, current_user, can, put_object, get_object, notify, notify_admins, send_mail, admin_email,
-                  aff_name, next_seq, scope_ids)
+                  aff_name, next_seq, scope_ids, tk_rep_q, reparto_emails)
 
 router = APIRouter(prefix="/api")
 EXT_AFF = {"pdf", "jpg", "jpeg", "png", "webp", "gif", "heic"}
@@ -81,12 +81,17 @@ async def nquery(u):
     if u["role"] == "admin" and not u.get("is_super"):
         views = [v for v, ps in VIEW_PERMS.items() if any(can(u, p) for p in ps)]
         ids = await scope_ids(u)
-        if ids is None:
+        rq = tk_rep_q(u)
+        if ids is None and not rq:
             q["view"] = {"$in": [None] + views}
         else:
-            tids = [t["id"] for t in await db.tickets.find({"affId": {"$in": list(ids)}}, {"_id": 0, "id": 1}).to_list(10000)]
+            tq = {**rq, **({} if ids is None else {"affId": {"$in": list(ids)}})}
+            tids = [t["id"] for t in await db.tickets.find(tq, {"_id": 0, "id": 1}).to_list(10000)]
             ors = [{"view": None}]
-            ors += [{"view": v, "ref": {"$in": list(ids)}} for v in views if v in ("affiliato", "scadenze")]
+            if ids is None:
+                ors.append({"view": {"$in": [v for v in views if v != "ticket"]}})
+            else:
+                ors += [{"view": v, "ref": {"$in": list(ids)}} for v in views if v in ("affiliato", "scadenze")]
             if "ticket" in views:
                 ors.append({"view": "ticket", "ref": {"$in": tids}})
             q["$or"] = ors
@@ -115,6 +120,26 @@ class TicketIn(BaseModel):
     oggetto: str
     priorita: str = "media"
     testo: str
+    reparto: str = ""
+
+
+class RepIn(BaseModel):
+    reparto: str
+
+
+async def rep_name(rid):
+    r = await db.reparti.find_one({"id": rid}, {"_id": 0}) if rid else None
+    return r["nome"] if r else "Senza reparto"
+
+
+async def tk_mail(t, subject, body):
+    for to in {await admin_email(), *(await reparto_emails(t.get("reparto")))} - {None, ""}:
+        await send_mail(to, subject, body, t["id"])
+
+
+@router.get("/reparti")
+async def reparti(u=Depends(current_user)):
+    return await db.reparti.find({}, {"_id": 0}).sort([("ordine", 1), ("nome", 1)]).to_list(100)
 
 
 class MsgIn(BaseModel):
@@ -140,6 +165,9 @@ async def tk_access(tid, u):
         ids = await scope_ids(u)
         if ids is not None and t["affId"] not in ids:
             raise HTTPException(404, "Ticket non trovato")
+        rq = tk_rep_q(u)
+        if rq and t.get("reparto") not in rq["reparto"]["$in"]:
+            raise HTTPException(404, "Ticket non trovato")
     return t
 
 
@@ -152,6 +180,7 @@ async def tickets(affId: str = "", u=Depends(current_user)):
         ids = await scope_ids(u)
         if ids is not None:
             q = {"affId": affId if affId in ids else {"$in": list(ids)}}
+        q.update(tk_rep_q(u))
     L = await db.tickets.find(q, {"_id": 0}).sort("createdAt", -1).to_list(500)
     if u["role"] == "admin":
         names = {a["id"]: aff_name(a) for a in await db.affiliates.find({"id": {"$in": list({t["affId"] for t in L})}}, {"_id": 0}).to_list(1000)}
@@ -166,13 +195,16 @@ async def new_ticket(body: TicketIn, u=Depends(current_user)):
         raise HTTPException(403, "Solo gli affiliati aprono ticket")
     if not body.oggetto.strip() or not body.testo.strip():
         raise HTTPException(400, "Compila oggetto e descrizione")
+    if not await db.reparti.find_one({"id": body.reparto}):
+        raise HTTPException(400, "Scegli il reparto")
     a = await db.affiliates.find_one({"id": u["id"]}, {"_id": 0})
     n = "T-" + str(await next_seq("ticket")).zfill(4)
-    t = {"id": uid(), "num": n, "affId": u["id"], "oggetto": body.oggetto.strip(), "priorita": body.priorita, "stato": "aperto",
+    t = {"id": uid(), "num": n, "affId": u["id"], "oggetto": body.oggetto.strip(), "priorita": body.priorita, "stato": "aperto", "reparto": body.reparto,
          "messaggi": [{"da": "affiliato", "testo": body.testo.strip(), "at": nowiso()}], "lettoAdmin": False, "lettoAff": True, "createdAt": nowiso()}
     await db.tickets.insert_one(dict(t))
     ag = aff_name(a)
-    await send_mail(await admin_email(), f"[Ticket #{n}] Nuovo ticket da {ag} – priorità {t['priorita']}", f"Nuovo ticket #{n} aperto da {ag} ({u['email']}).\n\nOggetto: {t['oggetto']}\nPriorità: {t['priorita']}\n\nMessaggio:\n{body.testo}", t["id"])
+    rn = await rep_name(body.reparto)
+    await tk_mail(t, f"[Ticket #{n}] [{rn}] Nuovo ticket da {ag} – priorità {t['priorita']}", f"Nuovo ticket #{n} aperto da {ag} ({u['email']}).\n\nReparto: {rn}\nOggetto: {t['oggetto']}\nPriorità: {t['priorita']}\n\nMessaggio:\n{body.testo}")
     await send_mail(u["email"], f"[Ticket #{n}] Abbiamo ricevuto la tua richiesta", f"Ciao {ag},\n\nabbiamo ricevuto il tuo ticket #{n}: \"{t['oggetto']}\".\nTi risponderemo il prima possibile.", t["id"])
     await notify_admins(f"Nuovo ticket <b>#{n}</b> da <b>{ag}</b>: {t['oggetto']}", "ticket", t["id"])
     await notify(u["id"], f"Ticket <b>#{n}</b> aperto. Ti abbiamo inviato un'email di conferma.", "ticket", t["id"])
@@ -207,7 +239,7 @@ async def ticket_msg(tid: str, body: MsgIn, u=Depends(current_user)):
         reopen = t["stato"] == "chiuso"
         await db.tickets.update_one({"id": tid}, {"$push": {"messaggi": msg}, "$set": {"lettoAdmin": False, "lettoAff": True, "stato": "aperto" if reopen else t["stato"]}})
         extra = " – riaperto" if reopen else ""
-        await send_mail(await admin_email(), f"[Ticket #{n}] Nuova risposta da {ag}{extra}", f"{ag} ha risposto al ticket #{n} \"{t['oggetto']}\":\n\n{msg['testo']}", tid)
+        await tk_mail(t, f"[Ticket #{n}] Nuova risposta da {ag}{extra}", f"{ag} ha risposto al ticket #{n} \"{t['oggetto']}\":\n\n{msg['testo']}")
         await notify_admins(f"<b>{ag}</b> ha risposto al ticket <b>#{n}</b>{extra}", "ticket", tid)
     return {"ok": True}
 
@@ -223,10 +255,29 @@ async def ticket_status(tid: str, body: StatoIn, u=Depends(current_user)):
         if body.stato != "chiuso":
             raise HTTPException(400, "Puoi solo segnare il ticket come risolto")
         await db.tickets.update_one({"id": tid}, {"$set": {"stato": "chiuso", "lettoAdmin": False}})
-        await send_mail(await admin_email(), f"[Ticket #{n}] Segnato come risolto da {ag}", f"{ag} ha segnato come risolto il ticket #{n} \"{t['oggetto']}\".", tid)
+        await tk_mail(t, f"[Ticket #{n}] Segnato come risolto da {ag}", f"{ag} ha segnato come risolto il ticket #{n} \"{t['oggetto']}\".")
         await notify_admins(f"<b>{ag}</b> ha segnato come risolto il ticket <b>#{n}</b>", "ticket", tid)
     else:
         await db.tickets.update_one({"id": tid}, {"$set": {"stato": body.stato, "lettoAff": False}})
         await send_mail(a["email"], f"[Ticket #{n}] Stato aggiornato: {LBL[body.stato]}", f"Ciao {ag},\n\nil ticket #{n} \"{t['oggetto']}\" è ora nello stato: {LBL[body.stato]}.", tid)
         await notify(t["affId"], f"Ticket <b>#{n}</b>: stato aggiornato a {LBL[body.stato]}", "ticket", tid)
     return {"ok": True}
+
+
+@router.post("/tickets/{tid}/reparto")
+async def ticket_reparto(tid: str, body: RepIn, u=Depends(current_user)):
+    if u["role"] != "admin" or not can(u, "ticket"):
+        raise HTTPException(403, "Permesso negato")
+    t = await tk_access(tid, u)
+    if not await db.reparti.find_one({"id": body.reparto}):
+        raise HTTPException(400, "Reparto non valido")
+    if body.reparto == t.get("reparto"):
+        return {"ok": True}
+    await db.tickets.update_one({"id": tid}, {"$set": {"reparto": body.reparto, "lettoAdmin": False}})
+    t["reparto"] = body.reparto
+    rn = await rep_name(body.reparto)
+    a = await db.affiliates.find_one({"id": t["affId"]}, {"_id": 0})
+    await tk_mail(t, f"[Ticket #{t['num']}] Spostato nel reparto {rn}", f"Il ticket #{t['num']} \"{t['oggetto']}\" di {aff_name(a)} è stato spostato nel reparto {rn} da {u.get('nome') or u['email']}.")
+    await notify_admins(f"Ticket <b>#{t['num']}</b> spostato nel reparto <b>{rn}</b>", "ticket", tid)
+    return {"ok": True}
+

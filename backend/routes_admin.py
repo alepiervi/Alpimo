@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 from core import (db, nowiso, today, uid, admin_user, need, super_user, can, get_settings, notify, notify_admins, send_mail, aff_name,
-                  url_def, enc, dec, file_info, itd, scope_all, aff_q, scope_ids, pag_for, add_biz, add_year, days_to, hash_pw, next_seq, PERMS, email_status)
+                  url_def, enc, dec, file_info, itd, scope_all, aff_q, scope_ids, pag_for, add_biz, add_year, days_to, hash_pw, next_seq, PERMS, email_status, resolve_role)
 from routes_aff import billing_errors
 
 router = APIRouter(prefix="/api/admin")
@@ -786,7 +786,7 @@ async def legal(body: LegalIn, u=Depends(need("impostazioni"))):
 
 @router.get("/team")
 async def team(u=Depends(super_user)):
-    return await db.users.find({"role": "admin"}, {"_id": 0, "password_hash": 0}).to_list(200)
+    return [await resolve_role(x) for x in await db.users.find({"role": "admin"}, {"_id": 0, "password_hash": 0}).to_list(200)]
 
 
 class TeamIn(BaseModel):
@@ -798,14 +798,21 @@ class TeamIn(BaseModel):
     full: bool = False
     tutteAziende: bool = False
     aziende: List[str] = []
+    ruoloId: str = ""
+    reparti: List[str] = []
 
 
 async def team_fields(body):
     valid = {c["id"] for c in await db.companies.find({}, {"_id": 0, "id": 1}).to_list(500)}
     if body.full:
-        return {"is_super": True, "perms": PERMS, "tutteAziende": True, "aziende": []}
-    return {"is_super": False, "perms": [p for p in body.perms if p in PERMS], "tutteAziende": body.tutteAziende,
-            "aziende": [] if body.tutteAziende else [c for c in body.aziende if c in valid]}
+        return {"is_super": True, "perms": PERMS, "tutteAziende": True, "aziende": [], "ruoloId": "", "reparti": []}
+    scope = {"is_super": False, "tutteAziende": body.tutteAziende, "aziende": [] if body.tutteAziende else [c for c in body.aziende if c in valid]}
+    if body.ruoloId:
+        if not await db.ruoli.find_one({"id": body.ruoloId}):
+            raise HTTPException(400, "Ruolo non valido")
+        return {**scope, "ruoloId": body.ruoloId, "perms": [], "reparti": []}
+    reps = {r["id"] for r in await db.reparti.find({}, {"_id": 0, "id": 1}).to_list(100)}
+    return {**scope, "ruoloId": "", "perms": [p for p in body.perms if p in PERMS], "reparti": [r for r in body.reparti if r in reps]}
 
 
 @router.post("/team")

@@ -12,12 +12,13 @@ import routes_auth  # noqa: E402
 import routes_common  # noqa: E402
 import routes_aff  # noqa: E402
 import routes_admin  # noqa: E402
+import routes_team  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("alpimo")
 GUIDE_SEED = os.path.join(os.path.dirname(__file__), "seed_guides.json")
 app = FastAPI(title="Portale Affiliati Alpimo")
-for r in (routes_auth.router, routes_common.router, routes_aff.router, routes_admin.router):
+for r in (routes_auth.router, routes_common.router, routes_aff.router, routes_admin.router, routes_team.router):
     app.include_router(r)
 app.add_middleware(CORSMiddleware, allow_origins=os.environ["CORS_ORIGINS"].split(","), allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
@@ -62,6 +63,8 @@ async def startup_tasks():
     if not s.get("seeded"):
         await db.settings.update_one({"_id": "main"}, {"$set": {"seeded": True}})
         await seed_demo()
+    if not await db.reparti.count_documents({}):
+        await db.reparti.insert_many([{"id": uid(), "nome": n, "ordine": i} for i, n in enumerate(["Amministrazione", "Travel", "IT · Sito internet", "IT · Email"])])
     if not await db.guides.count_documents({}) and os.path.exists(GUIDE_SEED):
         data = json.load(open(GUIDE_SEED))
         for f in data["files"]:

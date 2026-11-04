@@ -3,6 +3,7 @@ import { Badge, useLoad, useAction, useUI, UploadBox, Field, Empty, Ico } from "
 import { post, put, del, NEWSCAT, MATCAT, PERMS, eur, genPw } from "./lib.js";
 import { NewsCard, MatCard } from "./AffTabs.jsx";
 import { PayBox } from "./Aff.jsx";
+import RolesSettings, { Checks } from "./AdminRoles.jsx";
 
 export function AdminNews() {
   const [L, reload] = useLoad("/admin/news");
@@ -61,7 +62,7 @@ export function AdminMats() {
 export function Settings({ user }) {
   const perm = user.is_super || (user.perms || []).includes("impostazioni");
   const full = perm && (user.is_super || user.tutteAziende);
-  const tabs = [full && ["pag", "Pagamento predefinito"], user.is_super && ["aziende", "Aziende"], perm && ["pw", "Password affiliati"], full && ["legal", "Contratto e privacy"], user.is_super && ["team", "Team admin"], ["gen", "Generali"]].filter(Boolean);
+  const tabs = [full && ["pag", "Pagamento predefinito"], user.is_super && ["aziende", "Aziende"], perm && ["pw", "Password affiliati"], full && ["legal", "Contratto e privacy"], user.is_super && ["team", "Team admin"], user.is_super && ["ruoli", "Ruoli e reparti"], ["gen", "Generali"]].filter(Boolean);
   const [t, setT] = useState(tabs[0][0]);
   const [s, reload] = useLoad("/admin/settings");
   if (!s) return null;
@@ -74,6 +75,7 @@ export function Settings({ user }) {
       {t === "pw" && <PwSettings />}
       {t === "legal" && <LegalSettings s={s} reload={reload} />}
       {t === "team" && <Team me={user} />}
+      {t === "ruoli" && <RolesSettings />}
       {t === "gen" && <General s={s} reload={reload} full={full} />}
     </div>
   );
@@ -162,17 +164,19 @@ function LegalSettings({ s, reload }) {
 function Team({ me }) {
   const [L, reload] = useLoad("/admin/team");
   const [C] = useLoad("/admin/companies");
+  const [RL] = useLoad("/admin/ruoli");
+  const [R] = useLoad("/reparti");
   const [f, setF] = useState(null);
   const act = useAction();
-  if (!L || !C) return null;
+  if (!L || !C || !RL || !R) return null;
   const save = async () => { const r = await act(() => (f.id ? put(`/admin/team/${f.id}`, f) : post("/admin/team", f)), "Utente salvato"); if (r) { setF(null); reload(); } };
   const cn = Object.fromEntries(C.map((c) => [c.id, c.nome]));
   const scope = (u) => (u.is_super || u.tutteAziende ? "tutte le aziende" : (u.aziende || []).map((x) => cn[x]).filter(Boolean).join(", ") || "nessuna azienda");
-  const edit = (u) => setF({ ...u, password: "", full: !!u.is_super, tutteAziende: !!u.tutteAziende, aziende: u.aziende || [], perms: u.perms || [] });
+  const edit = (u) => setF({ ...u, password: "", full: !!u.is_super, tutteAziende: !!u.tutteAziende, aziende: u.aziende || [], perms: u.perms || [], ruoloId: u.ruoloId || "", reparti: u.reparti || [] });
   const tog = (k, id, on) => setF({ ...f, [k]: on ? [...f[k], id] : f[k].filter((x) => x !== id) });
   return (
     <div data-testid="team-settings">
-      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 12 }}><button className="btn primary" onClick={() => setF({ nome: "", email: "", password: genPw(), perms: [], active: true, full: false, tutteAziende: false, aziende: [] })} data-testid="team-new-btn">+ Aggiungi utente</button></div>
+      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 12 }}><button className="btn primary" onClick={() => setF({ nome: "", email: "", password: genPw(), perms: [], active: true, full: false, tutteAziende: false, aziende: [], ruoloId: "", reparti: [] })} data-testid="team-new-btn">+ Aggiungi utente</button></div>
       {f && <div className="card" style={{ marginBottom: 16 }} data-testid="team-form"><div style={{ display: "grid", gap: 12 }}>
         <div className="grid3"><Field label="Nome"><input type="text" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} data-testid="team-name" /></Field>
           <Field label="Email"><input type="email" value={f.email} disabled={!!f.id} onChange={(e) => setF({ ...f, email: e.target.value })} data-testid="team-email" /></Field>
@@ -184,15 +188,20 @@ function Team({ me }) {
             <label><input type="radio" checked={!f.tutteAziende} onChange={() => setF({ ...f, tutteAziende: false })} data-testid="team-scope-some" />Solo le aziende selezionate</label></div>
           {!f.tutteAziende && (C.length ? <div className="permgrid">{C.map((c) => <label className="chk" key={c.id}><input type="checkbox" checked={f.aziende.includes(c.id)} onChange={(e) => tog("aziende", c.id, e.target.checked)} data-testid={`team-company-${c.id}`} />{c.nome}</label>)}</div>
             : <div className="note warn small">Nessuna azienda creata: aggiungile in Impostazioni &gt; Aziende.</div>)}
-          <div className="lbl">Permessi</div>
-          <div className="permgrid">{Object.entries(PERMS).map(([k, l]) => <label className="chk" key={k}><input type="checkbox" checked={f.perms.includes(k)} onChange={(e) => tog("perms", k, e.target.checked)} data-testid={`team-perm-${k}`} />{l}</label>)}</div>
+          <div className="lbl">Ruolo</div>
+          <select value={f.ruoloId} onChange={(e) => setF({ ...f, ruoloId: e.target.value })} data-testid="team-ruolo"><option value="">Personalizzato (scegli sezioni e reparti qui sotto)</option>{RL.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}</select>
+          {f.ruoloId ? <div className="note info small">Sezioni e reparti vengono dal ruolo: modificali in Impostazioni &gt; Ruoli e reparti.</div> : <>
+            <div className="lbl">Permessi</div>
+            <div className="permgrid">{Object.entries(PERMS).map(([k, l]) => <label className="chk" key={k}><input type="checkbox" checked={f.perms.includes(k)} onChange={(e) => tog("perms", k, e.target.checked)} data-testid={`team-perm-${k}`} />{l}</label>)}</div>
+            <div className="lbl">Reparti ticket <span className="small muted">(nessuno = tutti)</span></div>
+            <Checks items={R.map((r) => [r.id, r.nome])} value={f.reparti} onChange={(v) => setF({ ...f, reparti: v })} prefix="team-rep" /></>}
         </>)}
         {!f.is_master && <label className="chk"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} data-testid="team-active" />Attivo</label>}
         <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" onClick={() => setF(null)}>Annulla</button><button className="btn primary" onClick={save} data-testid="team-save">Salva</button></div>
       </div></div>}
       <div className="card">{L.map((u) => (
-        <div className="todo" key={u.id} data-testid="team-row"><div><b>{u.nome || u.email}</b> {u.is_master ? <Badge k="accent">Master</Badge> : u.is_super && <Badge k="info">Accesso completo</Badge>} {!u.active && <Badge k="bad">Disattivato</Badge>}
-          <div className="small muted">{u.email} · {u.is_super ? "tutti i permessi" : (u.perms || []).map((p) => PERMS[p]?.split(" ")[0]).join(", ") || "nessun permesso"} · vede: {scope(u)}</div></div>
+        <div className="todo" key={u.id} data-testid="team-row"><div><b>{u.nome || u.email}</b> {u.is_master ? <Badge k="accent">Master</Badge> : u.is_super && <Badge k="info">Accesso completo</Badge>} {!u.active && <Badge k="bad">Disattivato</Badge>}{!u.is_super && u.ruoloNome && <Badge k="info">{u.ruoloNome}</Badge>}
+          <div className="small muted">{u.email} · {u.is_super ? "tutti i permessi" : (u.perms || []).map((p) => PERMS[p]?.split(" ")[0]).join(", ") || "nessun permesso"} · vede: {scope(u)}{!u.is_super && (u.perms || []).includes("ticket") && ` · reparti: ${(u.reparti || []).map((x) => R.find((r) => r.id === x)?.nome).filter(Boolean).join(", ") || "tutti"}`}</div></div>
           {(!u.is_master || me.is_master) && <button className="btn sm" onClick={() => edit(u)} data-testid="team-edit">Modifica</button>}</div>
       ))}</div>
     </div>

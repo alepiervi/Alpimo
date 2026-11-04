@@ -114,7 +114,30 @@ async def current_user(request: Request):
     u = await db.users.find_one({"id": p["sub"]}, {"_id": 0, "password_hash": 0})
     if not u or not u.get("active", True):
         raise HTTPException(401, "Account non attivo")
+    return await resolve_role(u)
+
+
+async def resolve_role(u):
+    if u.get("role") == "admin" and not u.get("is_super") and u.get("ruoloId"):
+        r = await db.ruoli.find_one({"id": u["ruoloId"]}, {"_id": 0})
+        if r:
+            u["perms"], u["reparti"], u["ruoloNome"] = r.get("perms", []), r.get("reparti", []), r["nome"]
     return u
+
+
+def tk_rep_q(u):
+    if u.get("role") == "admin" and not u.get("is_super") and u.get("reparti"):
+        return {"reparto": {"$in": u["reparti"]}}
+    return {}
+
+
+async def reparto_emails(rid):
+    out = []
+    for x in await db.users.find({"role": "admin", "active": {"$ne": False}, "is_super": {"$ne": True}}, {"_id": 0, "password_hash": 0}).to_list(500):
+        x = await resolve_role(x)
+        if rid in (x.get("reparti") or []) and "ticket" in (x.get("perms") or []):
+            out.append(x["email"])
+    return out
 
 
 async def affiliate_user(u=Depends(current_user)):
