@@ -51,3 +51,8 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 - Presa in carico ticket (campo assegnato {id,nome,at}; POST /api/tickets/{id}/assign). Risposta admin su ticket libero = auto-assegnazione. Riassegnare solo is_super. Nascosto agli affiliati.
 - Note interne ticket (campo note[], POST/DELETE /api/tickets/{id}/note), riquadro separato, nascoste agli affiliati; avviso (notifica personale + email) a chi ha il ticket in carico. Notifiche admin ora supportano anche destinatario personale (nkey $in [admin, id]).
 - Credenziali casella email (cred.emailUrl/emailUtente/emailPassword) in scheda admin > Accessi al sito; visibili all affiliato nella Carta d imbarco e nell email di consegna.
+- Logout automatico dopo 15 min di inattività (frontend/src/IdleLogout.jsx, localStorage alpimo_last_activity, avviso 1 min prima, vale per admin e affiliati).
+- Guide aggiornate (reparti, ruoli, presa in carico, note, tipologia, credenziali email, guida contestuale, logout). seed_guides.json ha "version": all'avvio se db.meta guides_seed.v < version le guide vengono sostituite per id (anche in produzione).
+
+## REGOLA UTENTE
+- Per OGNI aggiunta o modifica aggiornare le guide admin (testo + screenshot + video). Script in /root/guide2_setup.py (dati demo, flag guidetmp), /root/guide2_capture.py (Playwright, /root/pwenv), /root/guide2_publish.py; poi pulire i dati demo, esportare seed_guides.json incrementando "version".

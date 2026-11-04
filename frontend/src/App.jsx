@@ -4,18 +4,21 @@ import { get, post } from "./lib.js";
 import { AuthScreen, VerifyScreen, TermsGate } from "./Auth.jsx";
 import AffApp from "./Aff.jsx";
 import AdminApp from "./Admin.jsx";
+import { IdleLogout, clearIdle, startIdle } from "./IdleLogout.jsx";
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [idleOut, setIdleOut] = useState(false);
   const refresh = useCallback(() => get("/auth/me").then(setUser).catch(() => setUser(false)), []);
   useEffect(() => { refresh(); }, [refresh]);
-  const logout = async () => { await post("/auth/logout").catch(() => {}); setUser(false); };
+  const logout = useCallback(async (idle) => { await post("/auth/logout").catch(() => {}); clearIdle(); setIdleOut(idle === true); setUser(false); }, []);
+  const onAuth = () => { startIdle(); setIdleOut(false); return refresh(); };
   let body;
   if (user === null) body = <div className="denied muted" data-testid="app-loading">Caricamento…</div>;
-  else if (!user) body = <AuthScreen onAuth={refresh} />;
+  else if (!user) body = <>{idleOut && <div className="idle-out" data-testid="idle-logged-out">Sei stato disconnesso dopo 15 minuti di inattività. Accedi di nuovo per continuare.</div>}<AuthScreen onAuth={onAuth} /></>;
   else if (user.role === "affiliate" && !user.verified) body = <VerifyScreen user={user} onDone={refresh} logout={logout} />;
   else if (user.role === "affiliate" && user.termsOutdated) body = <TermsGate onDone={refresh} logout={logout} />;
   else if (user.role === "affiliate") body = <AffApp user={user} logout={logout} />;
   else body = <AdminApp user={user} logout={logout} />;
-  return <UIProvider>{body}</UIProvider>;
+  return <UIProvider>{body}{user && <IdleLogout onLogout={logout} />}</UIProvider>;
 }

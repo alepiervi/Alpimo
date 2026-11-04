@@ -65,13 +65,18 @@ async def startup_tasks():
         await seed_demo()
     if not await db.reparti.count_documents({}):
         await db.reparti.insert_many([{"id": uid(), "nome": n, "ordine": i} for i, n in enumerate(["Amministrazione", "Travel", "IT · Sito internet", "IT · Email"])])
-    if not await db.guides.count_documents({}) and os.path.exists(GUIDE_SEED):
+    if os.path.exists(GUIDE_SEED):
         data = json.load(open(GUIDE_SEED))
-        for f in data["files"]:
-            if not await db.files.find_one({"id": f["id"]}):
-                await db.files.insert_one(f)
-        if data["guides"]:
-            await db.guides.insert_many(data["guides"])
+        v = data.get("version", 1)
+        meta = await db.meta.find_one({"id": "guides_seed"}) or {}
+        empty = not await db.guides.count_documents({})
+        if empty or meta.get("v", 1) < v:
+            for f in data["files"]:
+                if not await db.files.find_one({"id": f["id"]}):
+                    await db.files.insert_one(f)
+            for g in data["guides"]:
+                await db.guides.replace_one({"id": g["id"]}, g, upsert=True)
+            await db.meta.update_one({"id": "guides_seed"}, {"$set": {"v": v}}, upsert=True)
 
 
 async def scheduler():
