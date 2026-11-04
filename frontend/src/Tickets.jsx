@@ -5,7 +5,7 @@ import { get, post, fdt } from "./lib.js";
 const ST = { aperto: ["Aperto", "warn"], in_lavorazione: ["In lavorazione", "info"], chiuso: ["Chiuso", "ok"] };
 const PR = { bassa: "neutral", media: "info", alta: "bad" };
 
-export default function Tickets({ role, initial, affId }) {
+export default function Tickets({ role, initial, affId, user }) {
   const admin = role === "admin";
   const [filter, setFilter] = useState("aperti");
   const [sel, setSel] = useState(initial || null);
@@ -29,12 +29,13 @@ export default function Tickets({ role, initial, affId }) {
             <div className="row between"><span><span className="tknum">#{t.num}</span><Badge k={ST[t.stato][1]}>{ST[t.stato][0]}</Badge></span><Badge k={PR[t.priorita]}>{t.priorita}</Badge></div>
             <div className="t" style={{ marginTop: 6 }}>{t.oggetto}</div>
             <div className="small muted">{t.reparto && <span className="tkrep" data-testid="ticket-item-reparto">{rn[t.reparto] || "—"}</span>}{admin && t.agenzia ? t.agenzia + " · " : ""}{fdt(t.createdAt)}</div>
+            {admin && <div className={`tkown ${t.assegnato ? "" : "free"}`} data-testid="ticket-item-owner">{t.assegnato ? `In carico a ${t.assegnato.id === user?.id ? "te" : t.assegnato.nome}` : "Non assegnato"}</div>}
           </button>
         )) : <Empty>Nessun ticket.</Empty>}
       </div>
       <div>
         {nuovo && <NewTicket R={R} onDone={(t) => { setNuovo(false); reload(); setSel(t.id); }} />}
-        {sel && !nuovo && <TicketDetail id={sel} admin={admin} R={R} rn={rn} onChange={reload} />}
+        {sel && !nuovo && <TicketDetail id={sel} admin={admin} R={R} rn={rn} user={user} onChange={reload} />}
         {!sel && !nuovo && <Empty>Seleziona un ticket {admin ? "" : "o aprine uno nuovo"}.</Empty>}
       </div>
     </div>
@@ -60,7 +61,25 @@ function NewTicket({ R, onDone }) {
   );
 }
 
-function TicketDetail({ id, admin, R, rn, onChange }) {
+function Owner({ t, user, reload }) {
+  const act = useAction();
+  const [T] = useLoad(user.is_super ? "/admin/team" : null);
+  const a = t.assegnato;
+  const set = (userId, msg) => act(() => post(`/tickets/${t.id}/assign`, { userId }), msg).then((x) => x && reload());
+  return (
+    <div className="tkowner" data-testid="ticket-owner">
+      <span><span className="small muted">In carico a</span> <b data-testid="ticket-owner-name">{a ? (a.id === user.id ? "te" : a.nome) : "nessuno"}</b>{a && <span className="small muted"> · dal {fdt(a.at)}</span>}</span>
+      <div className="row">
+        {!a && <button className="btn sm primary" onClick={() => set(user.id, "Ticket preso in carico")} data-testid="ticket-take">Prendi in carico</button>}
+        {a && a.id === user.id && <button className="btn sm" onClick={() => set("", "Ticket rilasciato")} data-testid="ticket-release">Lascia</button>}
+        {user.is_super && T && <select value={a?.id || ""} onChange={(e) => set(e.target.value, e.target.value ? "Ticket assegnato" : "Ticket rilasciato")} style={{ width: 200 }} data-testid="ticket-assign-select">
+          <option value="">— Non assegnato —</option>{T.filter((x) => x.active !== false && (x.is_super || (x.perms || []).includes("ticket"))).map((x) => <option key={x.id} value={x.id}>{x.nome || x.email}</option>)}</select>}
+      </div>
+    </div>
+  );
+}
+
+function TicketDetail({ id, admin, R, rn, user, onChange }) {
   const [t, setT] = useState(null);
   const [txt, setTxt] = useState("");
   const act = useAction();
@@ -85,6 +104,7 @@ function TicketDetail({ id, admin, R, rn, onChange }) {
           </select></div>
         ) : <Badge k={ST[t.stato][1]} data-testid="ticket-status">{ST[t.stato][0]}</Badge>}
       </div>
+      {admin && <Owner t={t} user={user} reload={load} />}
       <div className="msgs" ref={box}>
         {t.messaggi.map((m, i) => {
           const mine = (m.da === "admin") === admin;

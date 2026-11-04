@@ -49,7 +49,7 @@ export default function AdminApp({ user, logout }) {
           {V === "dashboard" && <Dash user={user} nav={nav} />}
           {V === "richieste" && <Richieste nav={nav} canOpen={canP(user, "affiliati")} />}
           {V === "affiliati" && (sel ? <Scheda id={sel} user={user} back={() => setSel(null)} /> : <Affiliati nav={nav} />)}
-          {V === "ticket" && <><h2 style={{ marginBottom: 16 }}><Ico n="ticket" s={22} />Ticket</h2><Tickets role="admin" initial={ref} /></>}
+          {V === "ticket" && <><h2 style={{ marginBottom: 16 }}><Ico n="ticket" s={22} />Ticket</h2><Tickets role="admin" initial={ref} user={user} /></>}
           {V === "corsi" && <AdminCourses />}
           {V === "bacheca" && <AdminNews />}
           {V === "materiali" && <AdminMats />}

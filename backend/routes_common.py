@@ -181,7 +181,7 @@ async def tickets(affId: str = "", u=Depends(current_user)):
         if ids is not None:
             q = {"affId": affId if affId in ids else {"$in": list(ids)}}
         q.update(tk_rep_q(u))
-    L = await db.tickets.find(q, {"_id": 0}).sort("createdAt", -1).to_list(500)
+    L = await db.tickets.find(q, {"_id": 0} if u["role"] == "admin" else {"_id": 0, "assegnato": 0}).sort("createdAt", -1).to_list(500)
     if u["role"] == "admin":
         names = {a["id"]: aff_name(a) for a in await db.affiliates.find({"id": {"$in": list({t["affId"] for t in L})}}, {"_id": 0}).to_list(1000)}
         for t in L:
@@ -219,7 +219,40 @@ async def get_ticket(tid: str, u=Depends(current_user)):
     await db.tickets.update_one({"id": tid}, {"$set": {field: True}})
     await db.notifications.update_many({"to": nkey(u), "ref": tid}, {"$set": {"letto": True}})
     t["emails"] = await db.email_log.find({"ref": tid}, {"_id": 0}).sort("at", -1).to_list(50) if u["role"] == "admin" else []
+    if u["role"] != "admin":
+        t.pop("assegnato", None)
     return t
+
+
+class AssignIn(BaseModel):
+    userId: str = ""
+
+
+def who(x):
+    return {"id": x["id"], "nome": x.get("nome") or x["email"]}
+
+
+@router.post("/tickets/{tid}/assign")
+async def ticket_assign(tid: str, body: AssignIn, u=Depends(current_user)):
+    if u["role"] != "admin" or not can(u, "ticket"):
+        raise HTTPException(403, "Permesso negato")
+    t = await tk_access(tid, u)
+    cur = (t.get("assegnato") or {}).get("id")
+    if not u.get("is_super"):
+        if body.userId == u["id"] and cur not in (None, u["id"]):
+            raise HTTPException(400, "Il ticket è già in carico a un collega")
+        if body.userId not in (u["id"], "") or (body.userId == "" and cur != u["id"]):
+            raise HTTPException(403, "Solo il Master o chi ha accesso completo può riassegnare i ticket")
+    val = None
+    if body.userId:
+        x = await db.users.find_one({"id": body.userId, "role": "admin", "active": {"$ne": False}}, {"_id": 0, "password_hash": 0})
+        if not x:
+            raise HTTPException(400, "Operatore non valido")
+        val = {**who(x), "at": nowiso()}
+    await db.tickets.update_one({"id": tid}, {"$set": {"assegnato": val}})
+    if val and body.userId != u["id"]:
+        await send_mail(x["email"], f"[Ticket #{t['num']}] Assegnato a te", f"Ciao {val['nome']},\n\n{u.get('nome') or u['email']} ti ha assegnato il ticket #{t['num']} \"{t['oggetto']}\".", tid)
+    return {"ok": True, "assegnato": val}
 
 
 @router.post("/tickets/{tid}/msg")
@@ -232,7 +265,10 @@ async def ticket_msg(tid: str, body: MsgIn, u=Depends(current_user)):
     msg = {"da": "admin" if u["role"] == "admin" else "affiliato", "testo": body.testo.strip(), "at": nowiso()}
     if u["role"] == "admin":
         st = "in_lavorazione" if t["stato"] == "aperto" else t["stato"]
-        await db.tickets.update_one({"id": tid}, {"$push": {"messaggi": msg}, "$set": {"lettoAff": False, "lettoAdmin": True, "stato": st}})
+        upd = {"lettoAff": False, "lettoAdmin": True, "stato": st}
+        if not t.get("assegnato"):
+            upd["assegnato"] = {**who(u), "at": nowiso()}
+        await db.tickets.update_one({"id": tid}, {"$push": {"messaggi": msg}, "$set": upd})
         await send_mail(a["email"], f"[Ticket #{n}] Nuova risposta dal supporto", f"Ciao {ag},\n\nil supporto ha risposto al ticket #{n} \"{t['oggetto']}\":\n\n{msg['testo']}\n\nStato attuale: {LBL[st]}", tid)
         await notify(t["affId"], f"Nuova risposta al ticket <b>#{n}</b>", "ticket", tid)
     else:
