@@ -138,6 +138,7 @@ function CredCard({ a, A, act, id, reload }) {
       <div className="grid2">
         <div style={{ display: "grid", gap: 10 }}><h4 style={{ margin: 0 }}>Super Admin (solo admin)</h4>{I(s, setS, "url", "URL")}{I(s, setS, "utente", "Utente")}{I(s, setS, "password", "Password", 1)}</div>
         <div style={{ display: "grid", gap: 10 }}><h4 style={{ margin: 0 }}>Admin affiliato</h4>{I(c, setC, "url", "URL admin")}{I(c, setC, "utente", "Utente")}{I(c, setC, "password", "Password admin", 1)}{I(c, setC, "passwordSito", "Password di sblocco sito", 1)}</div>
+        <div style={{ display: "grid", gap: 10 }} data-testid="cred-email-section"><h4 style={{ margin: 0 }}>Casella email affiliato</h4>{I(c, setC, "emailUrl", "URL webmail")}{I(c, setC, "emailUtente", "Utente (indirizzo email)")}{I(c, setC, "emailPassword", "Password provvisoria", 1)}</div>
       </div>
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}>
         {a.richiestaOnline && !a.online && <Badge k="warn">L'affiliato chiede la messa online</Badge>}

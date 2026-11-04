@@ -301,6 +301,13 @@ function Sito({ a, reload }) {
           <CredRow k="Password Admin" v={c.password} secret testid="cred-pass" />
           <CredRow k="Password sito" v={c.passwordSito} secret off={a.online} testid="cred-sitepass" />
         </div>
+        {(c.emailUrl || c.emailUtente) && <><div className="lbl" style={{ marginTop: 14 }}><Ico n="mail" s={14} /> Casella email</div>
+          <div className="cred" data-testid="cred-email-box">
+            <CredRow k="URL webmail" v={c.emailUrl} testid="cred-email-url" />
+            <CredRow k="Utente" v={c.emailUtente} testid="cred-email-user" />
+            <CredRow k="Password provvisoria" v={c.emailPassword} secret testid="cred-email-pass" />
+          </div>
+          <p className="small muted" style={{ marginTop: 6 }}>Al primo accesso cambia la password provvisoria della casella email.</p></>}
         <p className="small muted" style={{ marginTop: 10 }}>{a.online ? "Il sito è online: la password di anteprima non è più necessaria." : "La password sito protegge l'anteprima finché il sito non viene messo online."}</p>
         <div className="row between" style={{ marginTop: 14 }}>
           <div><div className="lbl">Dominio</div><b className="mono">{a.urlDef}</b> · scadenza {fd(a.dominio.scadenza)}</div>

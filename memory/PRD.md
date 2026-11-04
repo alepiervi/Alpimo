@@ -50,3 +50,4 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 - Known: notifiche admin condivise (segnare letto vale per tutti) - da separare per utente.
 - Presa in carico ticket (campo assegnato {id,nome,at}; POST /api/tickets/{id}/assign). Risposta admin su ticket libero = auto-assegnazione. Riassegnare solo is_super. Nascosto agli affiliati.
 - Note interne ticket (campo note[], POST/DELETE /api/tickets/{id}/note), riquadro separato, nascoste agli affiliati; avviso (notifica personale + email) a chi ha il ticket in carico. Notifiche admin ora supportano anche destinatario personale (nkey $in [admin, id]).
+- Credenziali casella email (cred.emailUrl/emailUtente/emailPassword) in scheda admin > Accessi al sito; visibili all affiliato nella Carta d imbarco e nell email di consegna.

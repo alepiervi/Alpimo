@@ -276,7 +276,7 @@ class CredIn(BaseModel):
 @router.post("/affiliates/{aid}/cred")
 async def cred(aid: str, body: CredIn, u=Depends(need("affiliati"))):
     await get_aff(aid, u)
-    c = {k: str(body.cred.get(k) or "") for k in ("url", "utente", "password", "passwordSito")}
+    c = {k: str(body.cred.get(k) or "") for k in ("url", "utente", "password", "passwordSito", "emailUrl", "emailUtente", "emailPassword")}
     s = {k: str(body.superAdmin.get(k) or "") for k in ("url", "utente", "password")}
     await db.affiliates.update_one({"id": aid}, {"$set": {"cred": enc(c), "superAdmin": enc(s)}})
     return {"ok": True}
@@ -290,7 +290,8 @@ async def deliver(aid: str, u=Depends(need("affiliati"))):
         raise HTTPException(400, "Salva prima le credenziali dell'admin affiliato")
     await db.affiliates.update_one({"id": aid}, {"$set": {"consegnato": True, "consegnatoAt": nowiso(), "consegna.fase": 3}})
     ag = aff_name(a)
-    await send_mail(a["email"], "Il tuo sito è pronto!", f"Ciao {ag},\n\nil sito {url_def(a)} è stato consegnato.\n\nURL admin: {c['url']}\nUtente: {c['utente']}\nPassword: {c['password']}\nPassword sito (anteprima): {c.get('passwordSito', '')}\n\nQuando hai finito le modifiche usa il pulsante \"Metti online\" nel portale.", aid)
+    mail = f"\n\nCasella email\nURL webmail: {c.get('emailUrl', '')}\nUtente: {c.get('emailUtente', '')}\nPassword provvisoria: {c.get('emailPassword', '')}\n(Cambiala al primo accesso.)" if c.get("emailUrl") or c.get("emailUtente") else ""
+    await send_mail(a["email"], "Il tuo sito è pronto!", f"Ciao {ag},\n\nil sito {url_def(a)} è stato consegnato.\n\nURL admin: {c['url']}\nUtente: {c['utente']}\nPassword: {c['password']}\nPassword sito (anteprima): {c.get('passwordSito', '')}{mail}\n\nQuando hai finito le modifiche usa il pulsante \"Metti online\" nel portale.", aid)
     await notify(aid, "Il tuo sito è stato <b>consegnato</b>! Trovi le credenziali nel portale.", "percorso")
     return {"ok": True}
 
