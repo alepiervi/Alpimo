@@ -70,7 +70,7 @@ async def download(fid: str, dl: int = 0, u=Depends(current_user)):
 
 # ---------- notifications ----------
 def nkey(u):
-    return "admin" if u["role"] == "admin" else u["id"]
+    return {"$in": ["admin", u["id"]]} if u["role"] == "admin" else u["id"]
 
 
 VIEW_PERMS = {"affiliato": ["affiliati", "richieste"], "ticket": ["ticket"], "corsi": ["corsi"], "scadenze": ["scadenze", "affiliati"]}
@@ -181,7 +181,7 @@ async def tickets(affId: str = "", u=Depends(current_user)):
         if ids is not None:
             q = {"affId": affId if affId in ids else {"$in": list(ids)}}
         q.update(tk_rep_q(u))
-    L = await db.tickets.find(q, {"_id": 0} if u["role"] == "admin" else {"_id": 0, "assegnato": 0}).sort("createdAt", -1).to_list(500)
+    L = await db.tickets.find(q, {"_id": 0} if u["role"] == "admin" else {"_id": 0, "assegnato": 0, "note": 0}).sort("createdAt", -1).to_list(500)
     if u["role"] == "admin":
         names = {a["id"]: aff_name(a) for a in await db.affiliates.find({"id": {"$in": list({t["affId"] for t in L})}}, {"_id": 0}).to_list(1000)}
         for t in L:
@@ -221,7 +221,47 @@ async def get_ticket(tid: str, u=Depends(current_user)):
     t["emails"] = await db.email_log.find({"ref": tid}, {"_id": 0}).sort("at", -1).to_list(50) if u["role"] == "admin" else []
     if u["role"] != "admin":
         t.pop("assegnato", None)
+        t.pop("note", None)
     return t
+
+
+class NoteIn(BaseModel):
+    testo: str
+
+
+def team_only(u):
+    if u["role"] != "admin" or not can(u, "ticket"):
+        raise HTTPException(403, "Permesso negato")
+
+
+@router.post("/tickets/{tid}/note")
+async def ticket_note(tid: str, body: NoteIn, u=Depends(current_user)):
+    team_only(u)
+    t = await tk_access(tid, u)
+    if not body.testo.strip():
+        raise HTTPException(400, "Scrivi la nota")
+    n = {"id": uid(), "testo": body.testo.strip(), "da": who(u), "at": nowiso()}
+    await db.tickets.update_one({"id": tid}, {"$push": {"note": n}})
+    a = t.get("assegnato")
+    if a and a["id"] != u["id"]:
+        x = await db.users.find_one({"id": a["id"], "active": {"$ne": False}}, {"_id": 0, "email": 1})
+        await notify(a["id"], f"Nota interna di <b>{n['da']['nome']}</b> sul ticket <b>#{t['num']}</b>", "ticket", tid)
+        if x:
+            await send_mail(x["email"], f"[Ticket #{t['num']}] Nuova nota interna da {n['da']['nome']}", f"Ciao {a['nome']},\n\n{n['da']['nome']} ha aggiunto una nota interna al ticket #{t['num']} \"{t['oggetto']}\" che hai in carico:\n\n{n['testo']}", tid)
+    return n
+
+
+@router.delete("/tickets/{tid}/note/{nid}")
+async def ticket_note_del(tid: str, nid: str, u=Depends(current_user)):
+    team_only(u)
+    t = await tk_access(tid, u)
+    n = next((x for x in t.get("note") or [] if x["id"] == nid), None)
+    if not n:
+        raise HTTPException(404, "Nota non trovata")
+    if n["da"]["id"] != u["id"] and not u.get("is_super"):
+        raise HTTPException(403, "Puoi eliminare solo le tue note")
+    await db.tickets.update_one({"id": tid}, {"$pull": {"note": {"id": nid}}})
+    return {"ok": True}
 
 
 class AssignIn(BaseModel):

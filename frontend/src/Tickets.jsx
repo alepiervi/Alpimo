@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Badge, useLoad, useAction, Field, Empty } from "./ui.jsx";
-import { get, post, fdt } from "./lib.js";
+import { Badge, useLoad, useAction, Field, Empty, Ico } from "./ui.jsx";
+import { get, post, del, fdt } from "./lib.js";
 
 const ST = { aperto: ["Aperto", "warn"], in_lavorazione: ["In lavorazione", "info"], chiuso: ["Chiuso", "ok"] };
 const PR = { bassa: "neutral", media: "info", alta: "bad" };
@@ -79,6 +79,25 @@ function Owner({ t, user, reload }) {
   );
 }
 
+function Notes({ t, user, reload }) {
+  const [txt, setTxt] = useState("");
+  const act = useAction();
+  const add = async () => { if (await act(() => post(`/tickets/${t.id}/note`, { testo: txt }), "Nota salvata")) { setTxt(""); reload(); } };
+  const rm = (n) => act(() => del(`/tickets/${t.id}/note/${n.id}`), "Nota eliminata").then((x) => x && reload());
+  const N = t.note || [];
+  return (
+    <div className="tknotes" data-testid="ticket-notes">
+      <div className="row between"><b><Ico n="lock" s={14} /> Note interne</b><span className="small muted">Visibili solo al team, mai all'affiliato</span></div>
+      {N.map((n) => (
+        <div className="tknote" key={n.id} data-testid="ticket-note"><div className="pre">{n.testo}</div>
+          <div className="row between"><small className="muted">{n.da.id === user.id ? "Tu" : n.da.nome} · {fdt(n.at)}</small>{(n.da.id === user.id || user.is_super) && <button className="linkbtn" onClick={() => rm(n)} data-testid="ticket-note-delete">Elimina</button>}</div></div>
+      ))}
+      <textarea value={txt} onChange={(e) => setTxt(e.target.value)} placeholder="Scrivi una nota per i colleghi…" data-testid="ticket-note-input" />
+      <div className="row" style={{ justifyContent: "flex-end", marginTop: 8 }}><button className="btn sm" onClick={add} disabled={!txt.trim()} data-testid="ticket-note-save">Aggiungi nota</button></div>
+    </div>
+  );
+}
+
 function TicketDetail({ id, admin, R, rn, user, onChange }) {
   const [t, setT] = useState(null);
   const [txt, setTxt] = useState("");
@@ -116,6 +135,7 @@ function TicketDetail({ id, admin, R, rn, user, onChange }) {
         {!admin && t.stato !== "chiuso" && <button className="btn" onClick={() => status("chiuso")} data-testid="ticket-resolve">Segna come risolto</button>}
         <button className="btn primary" onClick={send} data-testid="ticket-send">Invia</button>
       </div>
+      {admin && <Notes t={t} user={user} reload={load} />}
       {admin && (
         <details className="tkmails"><summary>Email inviate per questo ticket ({t.emails.length})</summary>
           {t.emails.map((e) => <div key={e.id} className="small" style={{ padding: "6px 0" }}><b>{e.subject}</b> → {e.to} · {fdt(e.at)} · <span className="muted">{e.status}</span></div>)}
