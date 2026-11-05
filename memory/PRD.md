@@ -56,4 +56,4 @@ Specifiche: /app/EMERGENT_PROMPT.md · riferimento grafico: /app/prototype/index
 
 ## REGOLA UTENTE
 - Per OGNI aggiunta o modifica aggiornare le guide admin (testo + screenshot + video). Script in /root/guide2_setup.py (dati demo, flag guidetmp), /root/guide2_capture.py (Playwright, /root/pwenv), /root/guide2_publish.py; poi pulire i dati demo, esportare seed_guides.json incrementando "version".
-- Logo Alpimo: /frontend/public/logo-alpimo.png (login grande), logo-mark.png (barra in alto), favicon.ico/favicon-32/apple-touch-icon (valigia). Email HTML con logo in testa: URL ricavato dall Origin delle richieste (core.PUBLIC, middleware remember_origin in server.py).
+- Logo Alpimo: /frontend/public/logo-alpimo.png (login grande), logo completo anche nella barra in alto (.brand-logo); logo-mark.png non usato in app, favicon.ico/favicon-32/apple-touch-icon (valigia). Email HTML con logo in testa: URL ricavato dall Origin delle richieste (core.PUBLIC, middleware remember_origin in server.py).

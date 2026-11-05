@@ -17,7 +17,7 @@ export default function AffApp({ user, logout }) {
   return (
     <div data-testid="affiliate-app">
       <div className="top">
-        <div className="brand"><img src="/logo-mark.png" alt="Alpimo" className="brand-mark" /><span>Portale Affiliati</span></div>
+        <div className="brand"><img src="/logo-alpimo.png" alt="Alpimo" className="brand-logo" data-testid="brand-logo" /><span>Portale Affiliati</span></div>
         <div className="right">
           <span className="small muted">{user.email}</span>
           <Bell onGo={go} />

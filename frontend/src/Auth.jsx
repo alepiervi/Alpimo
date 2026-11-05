@@ -12,9 +12,7 @@ function Art() {
   return (
     <div className="auth-art">
       <Scene id="auth" />
-      <div>
-        <div className="brand" style={{ color: "#fff" }}><img src="/logo-mark.png" alt="" className="brand-mark" />Alpimo · Rete Agenzie</div>
-      </div>
+      <div />
       <div>
         <h1>Il sito della tua agenzia, pronto al decollo.</h1>
         <p>Registrati, scegli dominio e logo, segui la realizzazione e cresci con i corsi dell'Academy.</p>
