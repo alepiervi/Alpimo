@@ -7,7 +7,7 @@ import asyncio  # noqa: E402
 import logging  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from starlette.middleware.cors import CORSMiddleware  # noqa: E402
-from core import db, hash_pw, uid, nowiso, get_settings, init_storage, PERMS  # noqa: E402
+from core import db, hash_pw, uid, nowiso, get_settings, init_storage, PERMS, PUBLIC  # noqa: E402
 import routes_auth  # noqa: E402
 import routes_common  # noqa: E402
 import routes_aff  # noqa: E402
@@ -21,6 +21,15 @@ app = FastAPI(title="Portale Affiliati Alpimo")
 for r in (routes_auth.router, routes_common.router, routes_aff.router, routes_admin.router, routes_team.router):
     app.include_router(r)
 app.add_middleware(CORSMiddleware, allow_origins=os.environ["CORS_ORIGINS"].split(","), allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+
+@app.middleware("http")
+async def remember_origin(request, call_next):
+    o = request.headers.get("origin") or ""
+    if o.startswith("https://") and "localhost" not in o:
+        PUBLIC["base"] = o.rstrip("/")
+    return await call_next(request)
+
 
 
 @app.get("/api/")

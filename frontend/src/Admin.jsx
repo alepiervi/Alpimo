@@ -32,7 +32,7 @@ export default function AdminApp({ user, logout }) {
   return (
     <div data-testid="admin-app">
       <div className="top">
-        <div className="brand"><i><Ico n="plane" s={18} /></i><span>Portale Affiliati · Admin</span></div>
+        <div className="brand"><img src="/logo-mark.png" alt="Alpimo" className="brand-mark" /><span>Portale Affiliati · Admin</span></div>
         <div className="right"><span className="small muted">{user.nome || user.email}</span><Bell onGo={go} /><button className="btn sm" onClick={logout} data-testid="logout-btn"><Ico n="logout" s={15} />Esci</button></div>
       </div>
       <div className="admin">

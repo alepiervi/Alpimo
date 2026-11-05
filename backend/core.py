@@ -220,9 +220,13 @@ async def notify_admins(testo, view=None, ref=None):
 
 
 # ---------- email: Aruba SMTP first, Brevo fallback ----------
+PUBLIC = {"base": ""}
+
+
 def html_body(body):
     import html as h
-    return "<div style='font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#14263b'>" + h.escape(body).replace("\n", "<br>") + "</div>"
+    logo = f"<div style='padding:6px 0 14px'><img src='{PUBLIC['base']}/logo-alpimo.png' alt='Alpimo' width='180' style='display:block;width:180px;height:auto'></div>" if PUBLIC["base"] else ""
+    return "<div style='font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#14263b'>" + logo + h.escape(body).replace("\n", "<br>") + "</div>"
 
 
 async def _aruba(to, subject, body):

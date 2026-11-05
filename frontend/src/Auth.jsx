@@ -13,7 +13,7 @@ function Art() {
     <div className="auth-art">
       <Scene id="auth" />
       <div>
-        <div className="brand" style={{ color: "#fff" }}><i><Ico n="plane" s={18} /></i>Rete Agenzie</div>
+        <div className="brand" style={{ color: "#fff" }}><img src="/logo-mark.png" alt="" className="brand-mark" />Alpimo · Rete Agenzie</div>
       </div>
       <div>
         <h1>Il sito della tua agenzia, pronto al decollo.</h1>
@@ -56,6 +56,7 @@ export function AuthScreen({ onAuth }) {
       <Art />
       <div className="auth-form">
         <div className="auth-box">
+          <img src="/logo-alpimo.png" alt="Alpimo – Affiliazione per agenzie di viaggi" className="auth-logo" data-testid="auth-logo" />
           <div className="tag"><Ico n="plane" s={14} />Portale affiliati</div>
           <h2>{tab === "register" ? "Crea il tuo account" : tab === "login" ? "Bentornato a bordo" : "Recupera la password"}</h2>
           {(tab === "login" || tab === "register") && (
