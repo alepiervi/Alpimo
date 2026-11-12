@@ -88,7 +88,8 @@ function Percorso({ me, reload, setTab }) {
 }
 
 function Profilo({ a, reload, setTab }) {
-  const edit = a.stato === "bozza" || a.stato === "rifiutata";
+  const late = a.approvatoManuale && a.stato === "accettata" && a.pagamento !== "confermato" && a.mancanti?.length > 0;
+  const edit = a.stato === "bozza" || a.stato === "rifiutata" || late;
   const [f, setF] = useState(null);
   const act = useAction();
   const { ask } = useUI();
@@ -96,7 +97,7 @@ function Profilo({ a, reload, setTab }) {
   if (!f) return null;
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const setP = (i, k, v) => setF({ ...f, persone: f.persone.map((p, j) => (j === i ? { ...p, [k]: v } : p)) });
-  const save = () => act(() => put("/aff/profile", f), "Bozza salvata").then((r) => r && reload());
+  const save = () => act(() => put("/aff/profile", f), late ? "Dati salvati" : "Bozza salvata").then((r) => r && reload());
   const send = async () => {
     if (!(await put("/aff/profile", f).then(() => true).catch(() => false))) return act(() => put("/aff/profile", f));
     if (!(await ask({ title: "Inviare la richiesta?", text: "Dopo l'invio i dati non saranno più modificabili fino alla risposta dell'amministratore." }))) return;
@@ -107,6 +108,7 @@ function Profilo({ a, reload, setTab }) {
       <div className="card-h"><h3><span className="num">1</span>Dati affiliato</h3>{!edit && <Badge k={statoInfo(a)[1]}>{a.stato === "in_attesa" ? "In attesa di approvazione" : "Inviati"}</Badge>}</div>
       {a.stato === "rifiutata" && <div className="note bad" data-testid="reject-reason">Richiesta non approvata. Motivo: <b>{a.nota}</b>. Correggi i dati e inviala di nuovo.</div>}
       {a.stato === "in_attesa" && <div className="note info">La tua richiesta è in valutazione: riceverai un'email con l'esito.</div>}
+      {late && <div className="note warn" data-testid="profile-missing">La tua affiliazione è stata approvata. Completa ancora: <b>{a.mancanti.join(", ")}</b>.</div>}
       {edit ? (
         <div style={{ display: "grid", gap: 12 }}>
           <div className="seg">
@@ -135,7 +137,7 @@ function Profilo({ a, reload, setTab }) {
             <Field label="Telefono"><input type="text" value={f.telefono} onChange={set("telefono")} data-testid="profile-telefono" /></Field>
             <Field label="Città"><input type="text" value={f.citta} onChange={set("citta")} data-testid="profile-citta" /></Field>
           </div>
-          <div>
+          {!late && <div>
             <div className="lbl" style={{ marginBottom: 6 }}>URL desiderati (fino a 3, in ordine di preferenza)</div>
             {[0, 1, 2].map((i) => (
               <div className="urlrow" key={i}><span className="i">{i + 1}</span>
@@ -143,11 +145,11 @@ function Profilo({ a, reload, setTab }) {
                 <span />
               </div>
             ))}
-          </div>
-          <div className="note info small">Per inviare la richiesta servono anche i dati di fatturazione completi. <a href="#d" onClick={(e) => { e.preventDefault(); setTab("documenti"); }}>Compilali in Documenti</a>.</div>
+          </div>}
+          <div className="note info small">{late ? "I dati di fatturazione si completano" : "Per inviare la richiesta servono anche i dati di fatturazione completi."} <a href="#d" onClick={(e) => { e.preventDefault(); setTab("documenti"); }}>{late ? "in Documenti" : "Compilali in Documenti"}</a>.</div>
           <div className="row end-m" style={{ justifyContent: "flex-end" }}>
-            <button className="btn" onClick={save} data-testid="profile-save">Salva bozza</button>
-            <button className="btn primary" onClick={send} data-testid="profile-submit">Invia richiesta</button>
+            <button className={`btn ${late ? "primary" : ""}`} onClick={save} data-testid="profile-save">{late ? "Salva dati" : "Salva bozza"}</button>
+            {!late && <button className="btn primary" onClick={send} data-testid="profile-submit">Invia richiesta</button>}
           </div>
         </div>
       ) : <DatiKV a={a} />}
@@ -175,6 +177,7 @@ function LogoUrl({ a, reload }) {
   const [alt, setAlt] = useState({});
   const logoOk = a.sceltaFinale || a.loghi.every(Boolean);
   const finalTxt = "\n\nCon logo e URL scelti, le altre proposte verranno eliminate e la scelta sarà definitiva.";
+  const noUrls = !a.urls.some((u) => u.value);
   const choose = async (i) => {
     if (!(await ask({ title: "Confermi l'URL definitivo?", text: `${a.urls[i].value}\n\nDopo la conferma non potrai più cambiarlo.${a.logoScelto != null ? finalTxt : ""}` }))) return;
     act(() => post("/aff/url-final", { idx: i }), "URL definitivo confermato").then((r) => r && reload());
@@ -201,15 +204,16 @@ function LogoUrl({ a, reload }) {
         </div>
       ) : <Empty>Stiamo preparando le 3 proposte di logo: ti avviseremo appena pronte.</Empty>}
       <h4>URL del sito</h4>
+      {noUrls && a.urlDefinitivo == null && a.proposte?.stato !== "inviate" && <p className="small muted" data-testid="url-empty-note">Indica i domini che preferisci (fino a 3) oppure attendi le nostre proposte.</p>}
       {a.urlDefinitivo == null && a.proposte?.stato === "inviate" && <AffProposte a={a} reload={reload} finalTxt={finalTxt} />}
-      {a.urls.map((u, i) => (u.value || a.urls[i].stato === "non_disponibile") && (
+      {a.urls.map((u, i) => (u.value || a.urls[i].stato === "non_disponibile" || (noUrls && a.urlDefinitivo == null)) && (
         <div key={i} className={`urlrow ${a.urlDefinitivo === i ? "def" : ""}`} data-testid={`url-row-${i}`}>
           <span className="i">{i + 1}</span>
-          <div className="row"><span className="mono">{u.value}</span><Badge k={URLST[u.stato][1]}>{URLST[u.stato][0]}</Badge>{a.urlDefinitivo === i && <Badge k="info">Definitivo</Badge>}</div>
+          <div className="row"><span className="mono">{u.value}</span>{u.value && <Badge k={URLST[u.stato][1]}>{URLST[u.stato][0]}</Badge>}{a.urlDefinitivo === i && <Badge k="info">Definitivo</Badge>}</div>
           <div className="row">
             {a.urlDefinitivo == null && u.stato === "disponibile" && <button className="btn sm primary" onClick={() => choose(i)} data-testid={`url-choose-${i}`}>Scegli come definitivo</button>}
-            {a.urlDefinitivo == null && u.stato === "non_disponibile" && a.proposte?.stato !== "inviate" && (<>
-              <input type="text" style={{ width: 180 }} placeholder="URL alternativo" value={alt[i] || ""} onChange={(e) => setAlt({ ...alt, [i]: e.target.value })} data-testid={`url-alt-input-${i}`} />
+            {a.urlDefinitivo == null && (u.stato === "non_disponibile" || !u.value) && a.proposte?.stato !== "inviate" && (<>
+              <input type="text" style={{ width: 180 }} placeholder={u.value ? "URL alternativo" : "es. miaagenzia.it"} value={alt[i] || ""} onChange={(e) => setAlt({ ...alt, [i]: e.target.value })} data-testid={`url-alt-input-${i}`} />
               <button className="btn sm" onClick={() => act(() => post("/aff/url-alt", { idx: i, value: alt[i] }), "Nuovo URL proposto").then((r) => r && reload())} data-testid={`url-alt-submit-${i}`}>Proponi</button>
             </>)}
           </div>

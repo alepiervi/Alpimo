@@ -16,6 +16,10 @@ export default function Scheda({ id, user, back }) {
   const [lbl, k] = statoInfo(a);
   const A = (path, body, msg) => act(() => post(`/admin/affiliates/${id}/${path}`, body), msg).then((r) => { if (r) reload(); return r; });
   const P = { a, A, reload, act, id, user };
+  const approve = async () => {
+    if (!(await ask({ title: `Approvare manualmente ${a.nomeAgenzia || a.email}?`, text: "L'affiliato riceverà email e notifica di approvazione e potrà completare i dati mancanti dal portale." }))) return;
+    A("approve", {}, "Affiliato approvato");
+  };
   const remove = async () => {
     const name = a.nomeAgenzia || a.email;
     const v = await ask({ title: `Eliminare ${name}?`, danger: true, ok: "Elimina definitivamente", input: "text", placeholder: "Scrivi ELIMINA per confermare",
@@ -31,6 +35,10 @@ export default function Scheda({ id, user, back }) {
         <div><h2>{a.nomeAgenzia || a.email}</h2><div className="row" style={{ marginTop: 6 }}><Badge k={k} data-testid="detail-status">{lbl}</Badge>{a.tipologia && <Badge k="info" data-testid="detail-tipologia">Sito {a.tipologia}</Badge>}<span className="small muted">{a.email} · tappa: {STEPS[a.step]}</span>{!a.user?.verified && <><Badge k="warn">Email non verificata</Badge><button className="btn sm" onClick={() => A("verify-email", {}, "Email segnata come verificata")} data-testid="detail-verify-email">Segna come verificata</button></>}</div></div>
         <button className="btn danger" onClick={remove} data-testid="affiliate-delete-btn">Elimina affiliato</button>
       </div>
+      {(a.stato === "bozza" || a.stato === "rifiutata") && canP(user, "richieste") && <div className="note warn row between" style={{ marginBottom: 14 }} data-testid="manual-approve-box">
+        <span>{a.stato === "bozza" ? "L'affiliato non ha ancora inviato la richiesta." : "La richiesta è stata rifiutata."} Puoi approvarlo tu manualmente, anche se mancano dei dati: potrai poi inviargli loghi e proposte di dominio.</span>
+        <button className="btn primary sm" onClick={approve} data-testid="manual-approve-btn">Approva manualmente</button></div>}
+      {a.mancanti?.length > 0 && <div className="note info small" style={{ marginBottom: 14 }} data-testid="manual-missing">Approvato manualmente{a.approvatoDa ? ` da ${a.approvatoDa}` : ""}. L'affiliato deve ancora completare: <b>{a.mancanti.join(", ")}</b>.</div>}
       <div className="sch-grid">
         <div className="card"><h3 style={{ marginBottom: 10 }}>Dati anagrafici</h3><DatiKV a={a} />{a.stato === "rifiutata" && <div className="note bad" style={{ marginTop: 10 }}>Rifiutata: {a.nota}</div>}</div>
         <InternalCard {...P} />

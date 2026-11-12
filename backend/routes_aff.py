@@ -46,6 +46,27 @@ def billing_errors(f, tipo):
     return e
 
 
+def missing_base(a, urls=True):
+    e = []
+    if a["tipo"] == "azienda":
+        if not (a.get("azienda") and a.get("referente")):
+            e.append("ragione sociale e referente")
+        if not re.fullmatch(r"\d{11}", a.get("piva") or ""):
+            e.append("P.IVA di 11 cifre")
+    elif not all(p.get("nome") and p.get("cognome") for p in a["persone"]):
+        e.append("nome e cognome di ogni affiliato")
+    for k, lbl in (("nomeAgenzia", "nome agenzia"), ("telefono", "telefono"), ("citta", "città")):
+        if not a.get(k):
+            e.append(lbl)
+    if urls and not any(x["value"] for x in a["urls"]):
+        e.append("almeno un URL")
+    return e
+
+
+def missing_data(a):
+    return missing_base(a, urls=False) + (["dati di fatturazione"] if billing_errors(a.get("fatturazione"), a["tipo"]) else [])
+
+
 async def view_aff(a, s=None):
     s = s or await get_settings()
     out = dict(a)
@@ -55,6 +76,7 @@ async def view_aff(a, s=None):
     out["loghiInfo"] = [await file_info(x) for x in a.get("loghi") or [None] * 3]
     out["ricevutaInfo"] = await file_info(a.get("ricevuta"))
     out["urlDef"] = url_def(a)
+    out["mancanti"] = missing_data(a) if a.get("approvatoManuale") else []
     return out
 
 
@@ -85,7 +107,8 @@ class ProfileIn(BaseModel):
 @router.put("/profile")
 async def save_profile(body: ProfileIn, u=Depends(affiliate_user)):
     a = await db.affiliates.find_one({"id": u["id"]}, {"_id": 0})
-    if a["stato"] not in ("bozza", "rifiutata"):
+    late = a.get("approvatoManuale") and a["stato"] == "accettata" and a["pagamento"] != "confermato"
+    if a["stato"] not in ("bozza", "rifiutata") and not late:
         raise HTTPException(400, "I dati sono già stati inviati")
     urls = [clean_url(x) for x in (body.urls + ["", "", ""])[:3]]
     for x in urls:
@@ -95,6 +118,8 @@ async def save_profile(body: ProfileIn, u=Depends(affiliate_user)):
     upd = body.model_dump()
     upd.update({"persone": pers, "tipo": "azienda" if body.tipo == "azienda" else "persona",
                 "urls": [{"value": x, "stato": "da_verificare"} for x in urls]})
+    if late:
+        upd.pop("urls")
     await db.affiliates.update_one({"id": u["id"]}, {"$set": upd})
     return {"ok": True}
 
@@ -104,19 +129,7 @@ async def submit(u=Depends(affiliate_user)):
     a = await db.affiliates.find_one({"id": u["id"]}, {"_id": 0})
     if a["stato"] not in ("bozza", "rifiutata"):
         raise HTTPException(400, "Richiesta già inviata")
-    e = []
-    if a["tipo"] == "azienda":
-        if not (a.get("azienda") and a.get("referente")):
-            e.append("ragione sociale e referente")
-        if not re.fullmatch(r"\d{11}", a.get("piva") or ""):
-            e.append("P.IVA di 11 cifre")
-    elif not all(p.get("nome") and p.get("cognome") for p in a["persone"]):
-        e.append("nome e cognome di ogni affiliato")
-    for k, lbl in (("nomeAgenzia", "nome agenzia"), ("telefono", "telefono"), ("citta", "città")):
-        if not a.get(k):
-            e.append(lbl)
-    if not any(x["value"] for x in a["urls"]):
-        e.append("almeno un URL")
+    e = missing_base(a)
     if e:
         raise HTTPException(400, "Completa: " + ", ".join(e))
     be = billing_errors(a.get("fatturazione"), a["tipo"])

@@ -101,6 +101,11 @@ function Richieste({ nav, canOpen }) {
     if (accept && !(await ask({ title: `Accettare ${r.nome}?`, text: "L'affiliato riceverà un'email di conferma." }))) return;
     act(() => post(`/admin/affiliates/${r.id}/decide`, { accept, nota }), accept ? "Richiesta accettata" : "Richiesta rifiutata").then((r) => r && reload());
   };
+  const approve = async (r) => {
+    if (!(await ask({ title: `Approvare manualmente ${r.nome || r.email}?`, text: "Vale anche se mancano dei dati: l'affiliato riceverà email e notifica e li completerà dal portale." }))) return;
+    act(() => post(`/admin/affiliates/${r.id}/approve`), "Affiliato approvato").then((x) => x && reload());
+  };
+  const AB = ({ r }) => <div className="row">{canOpen && <button className="btn sm" onClick={() => nav("affiliati", r.id)} data-testid="request-open">Scheda</button>}<button className="btn sm primary" onClick={() => approve(r)} data-testid="request-manual-approve">Approva manualmente</button></div>;
   const wait = L.filter((r) => r.stato === "in_attesa"), draft = L.filter((r) => r.stato === "bozza"), rej = L.filter((r) => r.stato === "rifiutata");
   return (
     <div data-testid="admin-requests">
@@ -109,8 +114,8 @@ function Richieste({ nav, canOpen }) {
         {wait.length ? wait.map((r) => <div className="todo" key={r.id} data-testid="request-row"><div><b>{r.nome}</b> · {r.email}<div className="small muted">{r.citta} · URL: {r.urls.filter((u) => u.value).map((u) => u.value).join(", ")} · inviata {fd(r.submittedAt)}</div></div>
           <div className="row">{canOpen && <button className="btn sm" onClick={() => nav("affiliati", r.id)}>Scheda</button>}<button className="btn sm primary" onClick={() => decide(r, true)} data-testid="request-accept">Accetta</button><button className="btn sm danger" onClick={() => decide(r, false)} data-testid="request-reject">Rifiuta</button></div></div>) : <Empty>Nessuna richiesta in attesa.</Empty>}
       </div>
-      <div className="card"><h3>Registrati senza dati inviati ({draft.length})</h3>{draft.map((r) => <div className="todo" key={r.id}><span>{r.email} {!r.verified && <Badge k="warn">Email non verificata</Badge>}</span><span className="small muted">{fd(r.createdAt)}</span></div>)}</div>
-      <div className="card"><h3>Rifiutate ({rej.length})</h3>{rej.map((r) => <div className="todo" key={r.id}><span><b>{r.nome}</b> · {r.nota}</span><span className="small muted">{r.email}</span></div>)}</div>
+      <div className="card"><h3>Registrati senza dati inviati ({draft.length})</h3>{draft.map((r) => <div className="todo" key={r.id} data-testid="draft-row"><span><b>{r.nome && r.nome !== r.email ? r.nome + " · " : ""}</b>{r.email} {!r.verified && <Badge k="warn">Email non verificata</Badge>}<div className="small muted">registrato {fd(r.createdAt)}</div></span><AB r={r} /></div>)}</div>
+      <div className="card"><h3>Rifiutate ({rej.length})</h3>{rej.map((r) => <div className="todo" key={r.id} data-testid="rejected-row"><span><b>{r.nome}</b> · {r.nota}<div className="small muted">{r.email}</div></span><AB r={r} /></div>)}</div>
     </div>
   );
 }

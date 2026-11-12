@@ -121,6 +121,8 @@ async def affiliate(aid: str, u=Depends(need("affiliati"))):
     a["urlDef"] = url_def(a)
     a["step"] = step_of(a)
     a["user"] = usr
+    from routes_aff import missing_data
+    a["mancanti"] = missing_data(a) if a.get("approvatoManuale") and a["stato"] == "accettata" else []
     a["docs"] = await db.documents.find({"affId": aid}, {"_id": 0}).sort("uploadedAt", -1).to_list(200)
     pays = await db.payments.find({"affId": aid}, {"_id": 0}).sort("at", -1).to_list(200)
     for p in pays:
@@ -171,6 +173,22 @@ async def decide(aid: str, body: DecideIn, u=Depends(need("richieste"))):
         await send_mail(a["email"], "La tua richiesta di affiliazione non è stata approvata", f"Ciao {ag},\n\nla tua richiesta non è stata approvata.\nMotivo: {body.nota}\n\nPuoi correggere i dati dal portale e inviarla di nuovo.", aid)
         await notify(aid, f"Richiesta non approvata: {body.nota}", "percorso")
     return {"ok": True}
+
+
+@router.post("/affiliates/{aid}/approve")
+async def approve_manual(aid: str, u=Depends(need("richieste"))):
+    from routes_aff import missing_data
+    a = await get_aff(aid, u)
+    if a["stato"] not in ("bozza", "rifiutata"):
+        raise HTTPException(400, "Si possono approvare manualmente solo bozze o richieste rifiutate")
+    await db.affiliates.update_one({"id": aid}, {"$set": {"stato": "accettata", "nota": "", "decidedAt": nowiso(), "approvatoManuale": True, "approvatoDa": u.get("nome") or u["email"]}})
+    a["approvatoManuale"] = True
+    m = missing_data(a)
+    ag = aff_name(a)
+    extra = f"\n\nPer completare l'affiliazione inserisci nel portale: {', '.join(m)}." if m else ""
+    await send_mail(a["email"], "La tua richiesta di affiliazione è stata approvata", f"Ciao {ag},\n\nabbiamo approvato la tua affiliazione! A breve troverai nel portale le proposte di logo e di dominio.{extra}", aid)
+    await notify(aid, "La tua affiliazione è stata <b>approvata</b>!" + (" Completa i dati mancanti nel profilo." if m else ""), "percorso")
+    return {"ok": True, "mancanti": m}
 
 
 @router.post("/affiliates/{aid}/verify-email")
