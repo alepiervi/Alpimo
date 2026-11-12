@@ -229,41 +229,59 @@ def html_body(body):
     return "<div style='font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#14263b'>" + logo + h.escape(body).replace("\n", "<br>") + "</div>"
 
 
-async def _aruba(to, subject, body):
-    user, pw = os.environ.get("ARUBA_SMTP_USER"), os.environ.get("ARUBA_SMTP_PASSWORD")
-    if not (user and pw):
+async def mail_cfg():
+    m = (await get_settings()).get("mail") or {}
+    E = os.environ.get
+    pw = dec(m["arubaPassword"]).get("v") if m.get("arubaPassword") else E("ARUBA_SMTP_PASSWORD")
+    bk = dec(m["brevoKey"]).get("v") if m.get("brevoKey") else E("BREVO_API_KEY")
+    em = lambda v: v if v and "@" in v else ""
+    user = em(m.get("arubaUser")) or em(E("ARUBA_SMTP_USER"))
+    return {"host": m.get("arubaHost") or E("ARUBA_SMTP_HOST") or "smtps.aruba.it", "port": int(m.get("arubaPort") or E("ARUBA_SMTP_PORT") or 465),
+            "user": user, "pw": pw, "name": m.get("fromName") or E("MAIL_FROM_NAME") or "", "brevoKey": bk,
+            "brevoSender": em(m.get("brevoSender")) or em(E("BREVO_SENDER_EMAIL")) or user, "verifica": bool(m.get("verificaEmail"))}
+
+
+async def _aruba(to, subject, body, c):
+    if not (c["user"] and c["pw"]):
         raise RuntimeError("Aruba non configurato")
-    port = int(os.environ.get("ARUBA_SMTP_PORT", "465"))
     m = EmailMessage()
-    m["From"] = f"{os.environ.get('MAIL_FROM_NAME', '')} <{user}>"
+    m["From"] = f"{c['name']} <{c['user']}>"
     m["To"], m["Subject"] = to, subject
     m.set_content(body)
     m.add_alternative(html_body(body), subtype="html")
-    await aiosmtplib.send(m, hostname=os.environ.get("ARUBA_SMTP_HOST", "smtps.aruba.it"), port=port, username=user, password=pw,
-                          use_tls=port == 465, start_tls=port != 465, timeout=20)
+    await aiosmtplib.send(m, hostname=c["host"], port=c["port"], username=c["user"], password=c["pw"],
+                          use_tls=c["port"] == 465, start_tls=c["port"] != 465, timeout=20)
 
 
-async def _brevo(to, subject, body):
-    key = os.environ.get("BREVO_API_KEY")
-    sender = os.environ.get("BREVO_SENDER_EMAIL") or os.environ.get("ARUBA_SMTP_USER")
-    if not (key and sender):
+async def _brevo(to, subject, body, c):
+    if not (c["brevoKey"] and c["brevoSender"]):
         raise RuntimeError("Brevo non configurato")
-    payload = {"sender": {"email": sender, "name": os.environ.get("MAIL_FROM_NAME", "")}, "to": [{"email": to}],
+    payload = {"sender": {"email": c["brevoSender"], "name": c["name"]}, "to": [{"email": to}],
                "subject": subject, "textContent": body, "htmlContent": html_body(body)}
-    async with httpx.AsyncClient(timeout=20) as c:
-        r = await c.post("https://api.brevo.com/v3/smtp/email", json=payload, headers={"api-key": key, "accept": "application/json"})
-        r.raise_for_status()
+    async with httpx.AsyncClient(timeout=20) as cl:
+        r = await cl.post("https://api.brevo.com/v3/smtp/email", json=payload, headers={"api-key": c["brevoKey"], "accept": "application/json"})
+        if r.status_code >= 400:
+            raise RuntimeError(f"HTTP {r.status_code} {r.text[:120]}")
+
+
+async def try_send(to, subject, body, only=None):
+    c, errors = await mail_cfg(), []
+    for name, fn in (("aruba", _aruba), ("brevo", _brevo)):
+        if only and name != only:
+            continue
+        try:
+            await fn(to, subject, body, c)
+            return name, errors
+        except Exception as e:
+            errors.append(f"{name}: {str(e)[:160]}")
+    return None, errors
 
 
 async def _deliver(log_id, to, subject, body):
-    errors = []
-    for name, fn in (("aruba", _aruba), ("brevo", _brevo)):
-        try:
-            await fn(to, subject, body)
-            await db.email_log.update_one({"id": log_id}, {"$set": {"status": "inviata", "provider": name, "errors": errors}})
-            return
-        except Exception as e:
-            errors.append(f"{name}: {str(e)[:160]}")
+    name, errors = await try_send(to, subject, body)
+    if name:
+        await db.email_log.update_one({"id": log_id}, {"$set": {"status": "inviata", "provider": name, "errors": errors}})
+        return
     st = "non_configurato" if all("non configurato" in e for e in errors) else "errore"
     await db.email_log.update_one({"id": log_id}, {"$set": {"status": st, "errors": errors}})
 
@@ -280,9 +298,9 @@ async def admin_email():
     return (await get_settings()).get("adminEmail") or os.environ.get("ADMIN_EMAIL")
 
 
-def email_status():
-    return {"aruba": bool(os.environ.get("ARUBA_SMTP_USER") and os.environ.get("ARUBA_SMTP_PASSWORD")),
-            "brevo": bool(os.environ.get("BREVO_API_KEY"))}
+async def email_status():
+    c = await mail_cfg()
+    return {"aruba": bool(c["user"] and c["pw"]), "brevo": bool(c["brevoKey"] and c["brevoSender"]), "verifica": c["verifica"]}
 
 
 # ---------- object storage ----------

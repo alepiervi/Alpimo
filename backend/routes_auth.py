@@ -85,7 +85,8 @@ async def register(body: RegisterIn, response: Response):
         raise HTTPException(400, "Email già registrata")
     s = await get_settings()
     v, t = s["legali"]["versione"], nowiso()
-    mail_on = any(email_status().values())
+    st = await email_status()
+    mail_on = st["verifica"] and (st["aruba"] or st["brevo"])
 
     u = {"id": uid(), "email": email, "password_hash": hash_pw(body.password), "role": "affiliate", "is_super": False, "nome": "",
          "perms": [], "verified": not mail_on, "active": True, "created_at": t}

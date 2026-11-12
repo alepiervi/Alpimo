@@ -75,7 +75,7 @@ function Dash({ user, nav }) {
   return (
     <div data-testid="admin-dashboard">
       <div className="dash-hero"><Scene id="dash" wide /><div><p>Panoramica</p><h2>{hi}, {user.nome || "admin"}</h2><span className="sub">Hai {d.todo.length} attività da gestire oggi.</span></div></div>
-      {!d.email.aruba && !d.email.brevo && <div className="note warn" style={{ marginTop: 14 }} data-testid="email-not-configured">Invio email non ancora configurato: le email vengono salvate nel Registro email ma non partono. Inserisci le credenziali Aruba (e Brevo come riserva) per attivarlo.</div>}
+      {!d.email.aruba && !d.email.brevo && <div className="note warn" style={{ marginTop: 14 }} data-testid="email-not-configured">Invio email non ancora configurato: le email vengono salvate nel Registro email ma non partono. Inserisci le credenziali Aruba (e Brevo come riserva) in Impostazioni › Email.</div>}
       <div className="kpis">{K.filter((k) => canP(user, k[3])).map(([k, l, i, v]) => <button key={k} className={`kpi ${d.kpi[k] ? "hot" : ""}`} onClick={() => nav(v)} data-testid={`kpi-${k}`}><span className="ki"><Ico n={i} s={17} /></span><span>{l}</span><b>{d.kpi[k]}</b></button>)}</div>
       <div className="sch-grid">
         <div className="card"><h3 style={{ marginBottom: 8 }}>Da fare</h3>

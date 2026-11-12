@@ -4,6 +4,7 @@ import { post, put, del, NEWSCAT, MATCAT, PERMS, eur, genPw } from "./lib.js";
 import { NewsCard, MatCard } from "./AffTabs.jsx";
 import { PayBox } from "./Aff.jsx";
 import RolesSettings, { Checks } from "./AdminRoles.jsx";
+import MailSettings from "./MailSettings.jsx";
 
 export function AdminNews() {
   const [L, reload] = useLoad("/admin/news");
@@ -62,7 +63,7 @@ export function AdminMats() {
 export function Settings({ user }) {
   const perm = user.is_super || (user.perms || []).includes("impostazioni");
   const full = perm && (user.is_super || user.tutteAziende);
-  const tabs = [full && ["pag", "Pagamento predefinito"], user.is_super && ["aziende", "Aziende"], perm && ["pw", "Password affiliati"], full && ["legal", "Contratto e privacy"], user.is_super && ["team", "Team admin"], user.is_super && ["ruoli", "Ruoli e reparti"], ["gen", "Generali"]].filter(Boolean);
+  const tabs = [full && ["pag", "Pagamento predefinito"], user.is_super && ["aziende", "Aziende"], perm && ["pw", "Password affiliati"], full && ["legal", "Contratto e privacy"], user.is_super && ["team", "Team admin"], user.is_super && ["ruoli", "Ruoli e reparti"], user.is_super && ["email", "Email"], ["gen", "Generali"]].filter(Boolean);
   const [t, setT] = useState(tabs[0][0]);
   const [s, reload] = useLoad("/admin/settings");
   if (!s) return null;
@@ -76,7 +77,8 @@ export function Settings({ user }) {
       {t === "legal" && <LegalSettings s={s} reload={reload} />}
       {t === "team" && <Team me={user} />}
       {t === "ruoli" && <RolesSettings />}
-      {t === "gen" && <General s={s} reload={reload} full={full} />}
+      {t === "email" && <MailSettings me={user} />}
+      {t === "gen" && <General s={s} reload={reload} full={full} user={user} />}
     </div>
   );
 }
@@ -209,7 +211,7 @@ function Team({ me }) {
   );
 }
 
-function General({ s, reload, full }) {
+function General({ s, reload, full, user }) {
   const [g, setG] = useState({ adminEmail: s.adminEmail, giorni: s.giorni });
   const [pw, setPw] = useState({ old: "", new: "" });
   const act = useAction();
@@ -218,7 +220,7 @@ function General({ s, reload, full }) {
       {full && <div className="card"><h3 style={{ marginBottom: 10 }}>Generali</h3><div style={{ display: "grid", gap: 12 }}>
         <Field label="Email dell'admin per le notifiche"><input type="email" value={g.adminEmail} onChange={(e) => setG({ ...g, adminEmail: e.target.value })} data-testid="gen-admin-email" /></Field>
         <Field label="Giorni lavorativi di consegna predefiniti"><input type="number" value={g.giorni} onChange={(e) => setG({ ...g, giorni: e.target.value })} data-testid="gen-days" /></Field>
-        <div className="note info small">Email: Aruba {s.email.aruba ? "attivo" : "non configurato"} · Brevo (riserva) {s.email.brevo ? "attivo" : "non configurato"}.</div>
+        <div className="note info small">Email: Aruba {s.email.aruba ? "attivo" : "non configurato"} · Brevo (riserva) {s.email.brevo ? "attivo" : "non configurato"}.{user?.is_super && " Le credenziali si inseriscono nella scheda «Email»."}</div>
         <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn primary" onClick={() => act(() => put("/admin/settings", g), "Impostazioni salvate").then((r) => r && reload())} data-testid="gen-save">Salva</button></div></div></div>}
       <div className="card"><h3 style={{ marginBottom: 10 }}>Cambia la tua password</h3><div style={{ display: "grid", gap: 12 }}>
         <Field label="Password attuale"><input type="password" value={pw.old} onChange={(e) => setPw({ ...pw, old: e.target.value })} data-testid="own-pw-old" /></Field>

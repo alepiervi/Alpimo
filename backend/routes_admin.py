@@ -8,10 +8,11 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 from core import (db, nowiso, today, uid, admin_user, need, super_user, can, get_settings, notify, notify_admins, send_mail, aff_name,
-                  url_def, enc, dec, file_info, itd, scope_all, aff_q, scope_ids, pag_for, add_biz, add_year, days_to, hash_pw, next_seq, PERMS, email_status, resolve_role, tk_rep_q)
+                  url_def, enc, dec, file_info, itd, scope_all, aff_q, scope_ids, pag_for, add_biz, add_year, days_to, hash_pw, next_seq, PERMS, email_status, resolve_role, tk_rep_q, mail_cfg, try_send)
 from routes_aff import billing_errors
 
 router = APIRouter(prefix="/api/admin")
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
 REM = [30, 15, 7, 1]
 
 
@@ -91,7 +92,7 @@ async def dashboard(u=Depends(admin_user)):
     dom = sorted([r for r in R if r["scadenza"] and days_to(r["scadenza"]) <= 30], key=lambda r: r["scadenza"]) if P("scadenze") else []
     return {"kpi": {"richieste": len([r for r in R if r["stato"] == "in_attesa"]), "ricevute": len([r for r in R if r["pagamento"] == "in_verifica"]),
                     "realizzazione": len([r for r in R if r["pagamento"] == "confermato" and not r["consegnato"]]), "ticket": tk_open, "domini": len(dom)},
-            "todo": todo, "domini": dom, "email": email_status()}
+            "todo": todo, "domini": dom, "email": await email_status()}
 
 
 @router.get("/counts")
@@ -791,14 +792,70 @@ async def emails(q: str = "", ref: str = "", u=Depends(need("email"))):
         f["ref"] = {"$nin": hidden, **({"$eq": ref} if ref else {})}
     if q:
         f["$or"] = [{"to": {"$regex": re.escape(q), "$options": "i"}}, {"subject": {"$regex": re.escape(q), "$options": "i"}}]
-    return {"items": await db.email_log.find(f, {"_id": 0}).sort("at", -1).to_list(300), "status": email_status()}
+    return {"items": await db.email_log.find(f, {"_id": 0}).sort("at", -1).to_list(300), "status": await email_status()}
 
 
 # ---------- impostazioni ----------
 @router.get("/settings")
 async def settings(u=Depends(admin_user)):
     s = await get_settings()
-    return {**s, "email": email_status()}
+    s.pop("mail", None)
+    return {**s, "email": await email_status()}
+
+
+class MailIn(BaseModel):
+    arubaHost: str = "smtps.aruba.it"
+    arubaPort: int = 465
+    arubaUser: str = ""
+    arubaPassword: str = ""
+    fromName: str = ""
+    brevoKey: str = ""
+    brevoSender: str = ""
+    verificaEmail: bool = False
+
+
+class MailTest(BaseModel):
+    to: str
+    provider: str = ""
+
+
+@router.get("/mail-settings")
+async def mail_get(u=Depends(super_user)):
+    c = await mail_cfg()
+    return {"arubaHost": c["host"], "arubaPort": c["port"], "arubaUser": c["user"] or "", "fromName": c["name"], "brevoSender": c["brevoSender"] or "",
+            "verificaEmail": c["verifica"], "hasArubaPassword": bool(c["pw"]), "hasBrevoKey": bool(c["brevoKey"]), "status": await email_status()}
+
+
+@router.put("/mail-settings")
+async def mail_put(body: MailIn, u=Depends(super_user)):
+    for v in (body.arubaUser, body.brevoSender):
+        if v.strip() and not EMAIL_RE.match(v.strip()):
+            raise HTTPException(400, f"Indirizzo email non valido: {v}")
+    old = (await get_settings()).get("mail") or {}
+    m = {"arubaHost": body.arubaHost.strip() or "smtps.aruba.it", "arubaPort": body.arubaPort, "arubaUser": body.arubaUser.strip(), "fromName": body.fromName.strip(),
+         "brevoSender": body.brevoSender.strip(), "verificaEmail": body.verificaEmail,
+         "arubaPassword": enc({"v": body.arubaPassword}) if body.arubaPassword else old.get("arubaPassword"),
+         "brevoKey": enc({"v": body.brevoKey.strip()}) if body.brevoKey.strip() else old.get("brevoKey")}
+    await db.settings.update_one({"_id": "main"}, {"$set": {"mail": m}})
+    return {"ok": True}
+
+
+@router.delete("/mail-settings/{field}")
+async def mail_clear(field: str, u=Depends(super_user)):
+    if field not in ("arubaPassword", "brevoKey"):
+        raise HTTPException(400, "Campo non valido")
+    await db.settings.update_one({"_id": "main"}, {"$unset": {f"mail.{field}": ""}})
+    return {"ok": True}
+
+
+@router.post("/mail-test")
+async def mail_test(body: MailTest, u=Depends(super_user)):
+    name, errors = await try_send(body.to.strip(), "Email di prova dal Portale Affiliati", "Questa è un'email di prova: la configurazione dell'invio email funziona correttamente.", body.provider or None)
+    await db.email_log.insert_one({"id": uid(), "to": body.to.strip(), "subject": "Email di prova dal Portale Affiliati", "body": "Email di prova", "ref": "test", "at": nowiso(),
+                                   "status": "inviata" if name else "errore", "provider": name, "errors": errors})
+    if name and not body.provider:
+        await db.settings.update_one({"_id": "main"}, {"$set": {"mail.verificaEmail": True}})
+    return {"ok": bool(name), "provider": name, "errors": errors}
 
 
 @router.put("/settings")
