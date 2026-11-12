@@ -14,7 +14,7 @@ export default function Scheda({ id, user, back }) {
   const { ask } = useUI();
   if (!a) return null;
   const [lbl, k] = statoInfo(a);
-  const A = (path, body, msg) => act(() => post(`/admin/affiliates/${id}/${path}`, body), msg).then((r) => r && reload());
+  const A = (path, body, msg) => act(() => post(`/admin/affiliates/${id}/${path}`, body), msg).then((r) => { if (r) reload(); return r; });
   const P = { a, A, reload, act, id, user };
   const remove = async () => {
     const name = a.nomeAgenzia || a.email;
@@ -81,6 +81,28 @@ function UrlCard({ a, A }) {
           {a.urlDefinitivo == null && <div className="row"><button className="btn sm" onClick={() => A("url", { idx: i, stato: "disponibile" }, "URL disponibile")} data-testid={`url-ok-${i}`}>Disponibile</button><button className="btn sm danger" onClick={() => A("url", { idx: i, stato: "non_disponibile" }, "URL non disponibile")} data-testid={`url-ko-${i}`}>Non disp.</button></div>}
         </div>
       ))}
+      {a.stato === "accettata" && a.urlDefinitivo == null && <Proposte a={a} A={A} />}
+    </div>
+  );
+}
+
+const PST = { inviate: ["In attesa di risposta", "warn"], accettata: ["Accettata", "ok"], rifiutate: ["Rifiutate dall'affiliato", "bad"] };
+
+function Proposte({ a, A }) {
+  const [txt, setTxt] = useState("");
+  const [nota, setNota] = useState("");
+  const p = a.proposte;
+  const D = txt.split(/[\n,;]+/).map((x) => x.trim()).filter(Boolean);
+  const send = async () => { if (await A("proposte", { domini: D, nota }, "Proposte inviate all'affiliato")) { setTxt(""); setNota(""); } };
+  return (
+    <div className="proposte" data-testid="proposte-admin">
+      <h4 style={{ margin: "14px 0 6px" }}>Proposte di dominio</h4>
+      {p && <div className="note info small" data-testid="proposte-current"><div className="row between"><b>Inviate il {fdt(p.at)}{p.da ? ` da ${p.da}` : ""}</b><Badge k={PST[p.stato][1]} data-testid="proposte-stato">{PST[p.stato][0]}</Badge></div>
+        <div className="mono" style={{ marginTop: 4 }}>{p.domini.join(" · ")}</div>{p.nota && <div className="muted">Nota: {p.nota}</div>}</div>}
+      <p className="small muted" style={{ margin: "6px 0" }}>Nessun dominio disponibile? Scrivi fino a 5 alternative già verificate (una per riga): l'affiliato riceve email e notifica e può sceglierne una o indicarne altre.</p>
+      <textarea rows={3} value={txt} onChange={(e) => setTxt(e.target.value)} placeholder={"agenziasole-viaggi.it\nviaggidelsole.eu"} data-testid="proposte-input" />
+      <input type="text" style={{ marginTop: 8 }} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota per l'affiliato (facoltativa)" data-testid="proposte-nota" />
+      <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}><span className="small muted">{D.length}/5 domini</span><button className="btn primary sm" disabled={!D.length || D.length > 5} onClick={send} data-testid="proposte-send">{p ? "Invia nuove proposte" : "Invia proposte"}</button></div>
     </div>
   );
 }

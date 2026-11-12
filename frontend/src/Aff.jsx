@@ -201,13 +201,14 @@ function LogoUrl({ a, reload }) {
         </div>
       ) : <Empty>Stiamo preparando le 3 proposte di logo: ti avviseremo appena pronte.</Empty>}
       <h4>URL del sito</h4>
+      {a.urlDefinitivo == null && a.proposte?.stato === "inviate" && <AffProposte a={a} reload={reload} finalTxt={finalTxt} />}
       {a.urls.map((u, i) => (u.value || a.urls[i].stato === "non_disponibile") && (
         <div key={i} className={`urlrow ${a.urlDefinitivo === i ? "def" : ""}`} data-testid={`url-row-${i}`}>
           <span className="i">{i + 1}</span>
           <div className="row"><span className="mono">{u.value}</span><Badge k={URLST[u.stato][1]}>{URLST[u.stato][0]}</Badge>{a.urlDefinitivo === i && <Badge k="info">Definitivo</Badge>}</div>
           <div className="row">
             {a.urlDefinitivo == null && u.stato === "disponibile" && <button className="btn sm primary" onClick={() => choose(i)} data-testid={`url-choose-${i}`}>Scegli come definitivo</button>}
-            {a.urlDefinitivo == null && u.stato === "non_disponibile" && (<>
+            {a.urlDefinitivo == null && u.stato === "non_disponibile" && a.proposte?.stato !== "inviate" && (<>
               <input type="text" style={{ width: 180 }} placeholder="URL alternativo" value={alt[i] || ""} onChange={(e) => setAlt({ ...alt, [i]: e.target.value })} data-testid={`url-alt-input-${i}`} />
               <button className="btn sm" onClick={() => act(() => post("/aff/url-alt", { idx: i, value: alt[i] }), "Nuovo URL proposto").then((r) => r && reload())} data-testid={`url-alt-submit-${i}`}>Proponi</button>
             </>)}
@@ -219,6 +220,35 @@ function LogoUrl({ a, reload }) {
         <div className="site">{logo ? <img src={fileUrl(logo.id)} alt="logo" /> : <span className="muted small">Logo</span>}<span className="nm">{a.nomeAgenzia}</span></div>
         <div className="heroimg"><Scene id="br" /><span>Viaggi su misura</span></div>
       </div>
+    </div>
+  );
+}
+
+function AffProposte({ a, reload, finalTxt }) {
+  const act = useAction();
+  const { ask } = useUI();
+  const [no, setNo] = useState(false);
+  const [n, setN] = useState(["", "", ""]);
+  const p = a.proposte;
+  const ok = async (i) => {
+    if (!(await ask({ title: `Confermi ${p.domini[i]} come URL definitivo?`, text: a.logoScelto != null ? finalTxt.trim() : "Non potrai più cambiarlo." }))) return;
+    act(() => post("/aff/proposte/accetta", { idx: i }), "URL definitivo confermato").then((r) => r && reload());
+  };
+  const rif = () => act(() => post("/aff/proposte/rifiuta", { urls: n }), "Nuovi domini inviati").then((r) => r && reload());
+  return (
+    <div className="proposte aff" data-testid="proposte-aff">
+      <b>I domini che hai indicato non sono disponibili: ecco le nostre proposte</b>
+      {p.nota && <p className="small muted" style={{ margin: "4px 0 0" }}>{p.nota}</p>}
+      <div className="plist">{p.domini.map((d, i) => (
+        <div className="pitem" key={d}><span className="mono">{d}</span><Badge k="ok">Disponibile</Badge><button className="btn sm primary" onClick={() => ok(i)} data-testid={`proposta-accept-${i}`}>Scegli questo</button></div>
+      ))}</div>
+      {!no ? <button className="btn sm ghost" onClick={() => setNo(true)} data-testid="proposte-reject-btn">Nessuno mi piace, ne indico altri</button> : (
+        <div style={{ display: "grid", gap: 8 }}>
+          <span className="small muted">Scrivi fino a 3 domini: li verificheremo noi.</span>
+          {n.map((v, i) => <input key={i} type="text" value={v} placeholder={`Dominio ${i + 1}`} onChange={(e) => setN(n.map((x, j) => (j === i ? e.target.value : x)))} data-testid={`proposte-new-${i}`} />)}
+          <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn sm" onClick={() => setNo(false)}>Annulla</button><button className="btn sm primary" disabled={!n.some((x) => x.trim())} onClick={rif} data-testid="proposte-reject-send">Invia i miei domini</button></div>
+        </div>
+      )}
     </div>
   );
 }

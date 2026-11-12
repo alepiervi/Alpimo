@@ -201,6 +201,31 @@ class LogoIn(BaseModel):
     file: Optional[str] = None
 
 
+class ProposteIn(BaseModel):
+    domini: List[str]
+    nota: str = ""
+
+
+@router.post("/affiliates/{aid}/proposte")
+async def proposte(aid: str, body: ProposteIn, u=Depends(need("affiliati"))):
+    from routes_aff import clean_url, URL_RE
+    a = await get_aff(aid, u)
+    if a["stato"] != "accettata" or a.get("urlDefinitivo") is not None:
+        raise HTTPException(400, "L'URL definitivo è già stato scelto")
+    D = list(dict.fromkeys(clean_url(x) for x in body.domini if x.strip()))
+    if not 1 <= len(D) <= 5:
+        raise HTTPException(400, "Inserisci da 1 a 5 domini")
+    bad = [x for x in D if not URL_RE.match(x)]
+    if bad:
+        raise HTTPException(400, f"Dominio non valido: {bad[0]}")
+    p = {"domini": D, "nota": body.nota.strip(), "stato": "inviate", "at": nowiso(), "da": u.get("nome") or u["email"]}
+    await db.affiliates.update_one({"id": aid}, {"$set": {"proposte": p}})
+    await notify(aid, "Ti abbiamo inviato <b>nuove proposte di dominio</b>: scegline una o indicane altre", "percorso")
+    nota = f"\n\nNota: {p['nota']}" if p["nota"] else ""
+    await send_mail(a["email"], "Nuove proposte di dominio per il tuo sito", f"Ciao {aff_name(a)},\n\ni domini che avevi indicato non sono disponibili. Abbiamo verificato per te queste alternative libere:\n\n" + "\n".join(f"• {x}" for x in D) + f"{nota}\n\nAccedi al portale per sceglierne una oppure indicare altri domini.", aid)
+    return {"ok": True}
+
+
 @router.post("/affiliates/{aid}/logo")
 async def set_logo(aid: str, body: LogoIn, u=Depends(need("affiliati"))):
     a = await get_aff(aid, u)

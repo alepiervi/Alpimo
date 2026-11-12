@@ -187,6 +187,47 @@ async def finalize(aid):
     await db.affiliates.update_one({"id": aid}, {"$set": {"loghi": loghi, "urls": urls, "sceltaFinale": True}})
 
 
+class ProposteRisp(BaseModel):
+    idx: int = -1
+    urls: List[str] = []
+
+
+def free_slot(a):
+    return next((i for i, x in enumerate(a["urls"]) if not x["value"] or x["stato"] == "non_disponibile"), 0)
+
+
+@router.post("/proposte/accetta")
+async def proposte_accetta(body: ProposteRisp, u=Depends(affiliate_user)):
+    a = await db.affiliates.find_one({"id": u["id"]}, {"_id": 0})
+    p = a.get("proposte") or {}
+    if a["stato"] != "accettata" or a.get("urlDefinitivo") is not None or p.get("stato") != "inviate" or not 0 <= body.idx < len(p["domini"]):
+        raise HTTPException(400, "Operazione non consentita")
+    d, i = p["domini"][body.idx], free_slot(a)
+    await db.affiliates.update_one({"id": u["id"]}, {"$set": {f"urls.{i}": {"value": d, "stato": "disponibile"}, "urlDefinitivo": i, "proposte.stato": "accettata", "proposte.scelto": d}})
+    await notify_admins(f"<b>{aff_name(a)}</b> ha accettato il dominio proposto <b>{d}</b> come URL definitivo", "affiliato", u["id"])
+    await finalize(u["id"])
+    return {"ok": True}
+
+
+@router.post("/proposte/rifiuta")
+async def proposte_rifiuta(body: ProposteRisp, u=Depends(affiliate_user)):
+    a = await db.affiliates.find_one({"id": u["id"]}, {"_id": 0})
+    if a["stato"] != "accettata" or a.get("urlDefinitivo") is not None or (a.get("proposte") or {}).get("stato") != "inviate":
+        raise HTTPException(400, "Operazione non consentita")
+    N = [clean_url(x) for x in body.urls if x.strip()][:3]
+    if not N:
+        raise HTTPException(400, "Indica almeno un dominio alternativo")
+    for x in N:
+        if not URL_RE.match(x):
+            raise HTTPException(400, f"URL non valido: {x}")
+    slots = [i for i, x in enumerate(a["urls"]) if not x["value"] or x["stato"] == "non_disponibile"] or [0, 1, 2]
+    upd = {f"urls.{i}": {"value": v, "stato": "da_verificare"} for i, v in zip(slots, N)}
+    await db.affiliates.update_one({"id": u["id"]}, {"$set": {**upd, "proposte.stato": "rifiutate"}})
+    await notify_admins(f"<b>{aff_name(a)}</b> ha rifiutato le proposte e indicato nuovi domini: <b>{', '.join(N)}</b>", "affiliato", u["id"])
+    await send_mail(await admin_email(), f"{aff_name(a)}: nuovi domini da verificare", f"{aff_name(a)} ha rifiutato i domini proposti e indica questi da verificare:\n\n" + "\n".join(f"• {x}" for x in N), u["id"])
+    return {"ok": True}
+
+
 @router.post("/url-alt")
 async def url_alt(body: IdxIn, u=Depends(affiliate_user)):
     a = await db.affiliates.find_one({"id": u["id"]}, {"_id": 0})
